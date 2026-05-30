@@ -1,4 +1,4 @@
-// server.js — Financial Move Kanban Server (with SQLite state)
+// server.js — Financial Move Kanban Server (with JSON file state)
 'use strict';
 
 const express    = require('express');
@@ -16,33 +16,28 @@ const gmailPassword = process.env.GMAIL_APP_PASSWORD || (config.gmail && config.
 const appUrl        = process.env.APP_URL            || (config.appUrl) || 'http://localhost:3000';
 const team          = (config.team) || [];
 
-// ── SQLite setup ──────────────────────────────────────────────────────────────
-const dataDir = path.join(__dirname, 'data');
+// ── JSON file state ───────────────────────────────────────────────────────────
+const dataDir  = path.join(__dirname, 'data');
+const stateFile = path.join(dataDir, 'kanban.json');
+
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-
-const Database = require('better-sqlite3');
-const db = new Database(path.join(dataDir, 'kanban.db'));
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS state (
-    id         INTEGER PRIMARY KEY CHECK (id = 1),
-    data       TEXT NOT NULL,
-    updated_at INTEGER NOT NULL
-  )
-`);
-
-// Initialize with empty state if table is empty
-const existing = db.prepare('SELECT id FROM state WHERE id = 1').get();
-if (!existing) {
-  const emptyState = JSON.stringify({ cards: [], nextId: 1 });
-  db.prepare('INSERT INTO state (id, data, updated_at) VALUES (1, ?, ?)').run(emptyState, Date.now());
+if (!fs.existsSync(stateFile)) {
+  fs.writeFileSync(stateFile, JSON.stringify({ state: { cards: [], nextId: 1 }, updated_at: Date.now() }), 'utf-8');
 }
 
-const stmtGet    = db.prepare('SELECT data, updated_at FROM state WHERE id = 1');
-const stmtUpsert = db.prepare(`
-  INSERT INTO state (id, data, updated_at) VALUES (1, ?, ?)
-  ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at
-`);
+function readState() {
+  try {
+    return JSON.parse(fs.readFileSync(stateFile, 'utf-8'));
+  } catch {
+    return { state: { cards: [], nextId: 1 }, updated_at: Date.now() };
+  }
+}
+
+function writeState(state) {
+  const updated_at = Date.now();
+  fs.writeFileSync(stateFile, JSON.stringify({ state, updated_at }), 'utf-8');
+  return updated_at;
+}
 
 // ── Express app ───────────────────────────────────────────────────────────────
 const app  = express();
@@ -215,16 +210,15 @@ app.get('/health', (req, res) => {
 
 // Get kanban state
 app.get('/api/state', (req, res) => {
-  const row = stmtGet.get();
-  res.json({ state: JSON.parse(row.data), updated_at: row.updated_at });
+  const { state, updated_at } = readState();
+  res.json({ state, updated_at });
 });
 
 // Save kanban state
 app.post('/api/state', (req, res) => {
   const { state } = req.body;
   if (!state) return res.status(400).json({ ok: false, error: 'Missing state' });
-  const updated_at = Date.now();
-  stmtUpsert.run(JSON.stringify(state), updated_at);
+  const updated_at = writeState(state);
   res.json({ ok: true, updated_at });
 });
 
@@ -322,5 +316,5 @@ app.listen(PORT, () => {
   console.log(`   API:    http://localhost:${PORT}/api/state`);
   console.log(`   Gmail:  ${gmailUser || '(not configured)'}`);
   console.log(`   Team:   ${team.length} members (${teamWithEmail().length} with email)`);
-  console.log(`   DB:     ${path.join(dataDir, 'kanban.db')}\n`);
+  console.log(`   State:  ${stateFile}\n`);
 });
