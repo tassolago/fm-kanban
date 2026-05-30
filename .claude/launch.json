@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "kanban-preview",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "-p", "5500", "/Users/tassolago/Documents/Claude/kanban"],
+      "port": 5500
+    }
+  ]
+}
