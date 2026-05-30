@@ -1,4 +1,4 @@
-// server.js — Financial Move Kanban Server (with JSON file state)
+// server.js — Financial Move Kanban Server (with JSON file state + Google Meet AI)
 'use strict';
 
 const express    = require('express');
@@ -6,15 +6,46 @@ const cors       = require('cors');
 const nodemailer = require('nodemailer');
 const path       = require('path');
 const fs         = require('fs');
+const { google } = require('googleapis');
+const Anthropic  = require('@anthropic-ai/sdk');
 
 // ── Config (fallback for local dev) ──────────────────────────────────────────
 let config;
 try { config = require('./config'); } catch { config = {}; }
 
-const gmailUser     = process.env.GMAIL_USER        || (config.gmail && config.gmail.user)        || '';
-const gmailPassword = process.env.GMAIL_APP_PASSWORD || (config.gmail && config.gmail.appPassword) || '';
-const appUrl        = process.env.APP_URL            || (config.appUrl) || 'http://localhost:3000';
+const gmailUser     = process.env.GMAIL_USER           || (config.gmail && config.gmail.user)        || '';
+const gmailPassword = process.env.GMAIL_APP_PASSWORD   || (config.gmail && config.gmail.appPassword) || '';
+const appUrl        = process.env.APP_URL               || (config.appUrl) || 'http://localhost:3000';
 const team          = (config.team) || [];
+const anthropicKey  = process.env.ANTHROPIC_API_KEY    || '';
+const googleClientId     = process.env.GOOGLE_CLIENT_ID     || '';
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
+
+// ── Anthropic client ──────────────────────────────────────────────────────────
+const anthropic = anthropicKey ? new Anthropic({ apiKey: anthropicKey }) : null;
+
+// ── Google OAuth2 ─────────────────────────────────────────────────────────────
+const oauth2Client = new google.auth.OAuth2(
+  googleClientId,
+  googleClientSecret,
+  appUrl + '/auth/callback'
+);
+const tokensFile = path.join(__dirname, 'data', 'google-tokens.json');
+
+function loadGoogleTokens() {
+  try { return JSON.parse(fs.readFileSync(tokensFile, 'utf-8')); } catch { return null; }
+}
+function saveGoogleTokens(tokens) {
+  fs.writeFileSync(tokensFile, JSON.stringify(tokens), 'utf-8');
+}
+// Restore saved tokens on startup
+const savedTokens = loadGoogleTokens();
+if (savedTokens) oauth2Client.setCredentials(savedTokens);
+// Auto-refresh tokens
+oauth2Client.on('tokens', (tokens) => {
+  const current = loadGoogleTokens() || {};
+  saveGoogleTokens({ ...current, ...tokens });
+});
 
 // ── JSON file state ───────────────────────────────────────────────────────────
 const dataDir  = path.join(__dirname, 'data');
@@ -314,6 +345,171 @@ app.post('/api/notify', async (req, res) => {
     res.json({ ok: true, sent });
   } catch (err) {
     console.error(`[${timestamp()}] ❌ Email error:`, err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ── Google Meet Integration ───────────────────────────────────────────────────
+
+// Step 1: Redirect to Google OAuth consent screen
+app.get('/auth/google', (req, res) => {
+  if (!googleClientId) return res.status(503).send('GOOGLE_CLIENT_ID not configured');
+  const url = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    prompt: 'consent',
+    scope: [
+      'https://www.googleapis.com/auth/drive.readonly',
+      'https://www.googleapis.com/auth/drive.metadata.readonly',
+    ],
+  });
+  res.redirect(url);
+});
+
+// Step 2: OAuth callback — save tokens
+app.get('/auth/callback', async (req, res) => {
+  try {
+    const { tokens } = await oauth2Client.getToken(req.query.code);
+    saveGoogleTokens(tokens);
+    oauth2Client.setCredentials(tokens);
+    console.log(`[${timestamp()}] ✅ Google OAuth connected`);
+    res.redirect('/?google=connected');
+  } catch (err) {
+    console.error(`[${timestamp()}] ❌ OAuth error:`, err.message);
+    res.redirect('/?google=error');
+  }
+});
+
+// Google connection status
+app.get('/api/google/status', (req, res) => {
+  const tokens = loadGoogleTokens();
+  res.json({ connected: !!(tokens && (tokens.access_token || tokens.refresh_token)) });
+});
+
+// Scan Drive for recent Meet transcripts
+app.get('/api/meetings/scan', async (req, res) => {
+  const tokens = loadGoogleTokens();
+  if (!tokens) return res.status(401).json({ ok: false, error: 'Google não conectado' });
+
+  oauth2Client.setCredentials(tokens);
+  const drive = google.drive({ version: 'v3', auth: oauth2Client });
+
+  try {
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Search for Meet transcript Google Docs
+    const r1 = await drive.files.list({
+      q: `mimeType='application/vnd.google-apps.document' and modifiedTime > '${since}' and (name contains 'Transcript' or name contains 'Transcrição' or name contains 'transcrição' or name contains 'Meet')`,
+      fields: 'files(id, name, createdTime, modifiedTime, webViewLink)',
+      orderBy: 'modifiedTime desc',
+      pageSize: 20,
+    });
+
+    // Also scan Meet Recordings folder for docs
+    const folderR = await drive.files.list({
+      q: `name='Meet Recordings' and mimeType='application/vnd.google-apps.folder'`,
+      fields: 'files(id)',
+    });
+
+    let extraFiles = [];
+    if (folderR.data.files?.length) {
+      const folderId = folderR.data.files[0].id;
+      const r2 = await drive.files.list({
+        q: `'${folderId}' in parents and modifiedTime > '${since}' and mimeType='application/vnd.google-apps.document'`,
+        fields: 'files(id, name, createdTime, modifiedTime, webViewLink)',
+        orderBy: 'modifiedTime desc',
+        pageSize: 10,
+      });
+      extraFiles = r2.data.files || [];
+    }
+
+    const all = [...(r1.data.files || []), ...extraFiles];
+    const unique = all.filter((f, i, arr) => arr.findIndex(x => x.id === f.id) === i);
+
+    res.json({ ok: true, files: unique });
+  } catch (err) {
+    console.error(`[${timestamp()}] ❌ Drive scan error:`, err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Process a transcript file with Claude — extract tasks
+app.post('/api/meetings/process', async (req, res) => {
+  const { fileId, fileName } = req.body;
+  if (!fileId) return res.status(400).json({ ok: false, error: 'fileId required' });
+
+  const tokens = loadGoogleTokens();
+  if (!tokens) return res.status(401).json({ ok: false, error: 'Google não conectado' });
+
+  if (!anthropic) return res.status(503).json({ ok: false, error: 'ANTHROPIC_API_KEY não configurada' });
+
+  oauth2Client.setCredentials(tokens);
+  const drive = google.drive({ version: 'v3', auth: oauth2Client });
+
+  try {
+    // Export Google Doc as plain text
+    const exportRes = await drive.files.export(
+      { fileId, mimeType: 'text/plain' },
+      { responseType: 'text' }
+    );
+    const transcript = String(exportRes.data).substring(0, 20000);
+
+    if (!transcript.trim()) {
+      return res.status(400).json({ ok: false, error: 'Documento vazio ou sem texto legível' });
+    }
+
+    // Extract tasks with Claude
+    const teamNames = team.map(m => m.name).join(', ');
+    const message = await anthropic.messages.create({
+      model: 'claude-opus-4-5',
+      max_tokens: 2048,
+      messages: [{
+        role: 'user',
+        content: `Você é um assistente que analisa transcrições de reuniões corporativas em português e extrai tarefas e demandas.
+
+Time disponível para atribuição: ${teamNames}
+
+Analise a transcrição abaixo e extraia TODAS as tarefas, demandas, próximos passos e compromissos mencionados.
+
+Para cada tarefa identifique:
+- título: descrição curta e clara da tarefa (máx 60 chars)
+- assignee: nome EXATO de um membro do time acima, ou null se não mencionado
+- dueDate: data no formato YYYY-MM-DD se mencionada, ou null
+- department: área/departamento se inferível, ou null
+- notes: contexto relevante (máx 100 chars)
+
+Responda SOMENTE com JSON válido, sem markdown, sem explicações:
+{
+  "meetingTitle": "título da reunião inferido do conteúdo",
+  "summary": "resumo de 2-3 linhas do que foi discutido",
+  "tasks": [
+    {
+      "title": "...",
+      "assignee": "...",
+      "dueDate": "...",
+      "department": "...",
+      "notes": "..."
+    }
+  ]
+}
+
+Transcrição:
+${transcript}`,
+      }],
+    });
+
+    let extracted;
+    try {
+      extracted = JSON.parse(message.content[0].text);
+    } catch {
+      // Try to find JSON in the response
+      const match = message.content[0].text.match(/\{[\s\S]*\}/);
+      extracted = match ? JSON.parse(match[0]) : { meetingTitle: fileName, tasks: [] };
+    }
+
+    console.log(`[${timestamp()}] ✅ Meeting processed: "${extracted.meetingTitle}" — ${extracted.tasks?.length || 0} tasks`);
+    res.json({ ok: true, fileId, fileName, ...extracted });
+  } catch (err) {
+    console.error(`[${timestamp()}] ❌ Meeting process error:`, err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
