@@ -873,7 +873,7 @@ function openModal(cardId, dept, defaultCol) {
   teamMembers.forEach(m => {
     const opt = document.createElement('option');
     opt.value = m.name;
-    opt.textContent = `${m.name} · ${m.role}`;
+    opt.textContent = m.role ? `${m.name} · ${m.role}` : m.name;
     sel.appendChild(opt);
   });
 

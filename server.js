@@ -51,10 +51,52 @@ oauth2Client.on('tokens', (tokens) => {
 // ── JSON file state ───────────────────────────────────────────────────────────
 const dataDir  = path.join(__dirname, 'data');
 const stateFile = path.join(dataDir, 'kanban.json');
+const teamFile  = path.join(dataDir, 'team.json');
 
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 if (!fs.existsSync(stateFile)) {
   fs.writeFileSync(stateFile, JSON.stringify({ state: { cards: [], nextId: 1 }, updated_at: Date.now() }), 'utf-8');
+}
+
+// ── Dynamic team management ───────────────────────────────────────────────────
+function loadDynamicTeam() {
+  try { return JSON.parse(fs.readFileSync(teamFile, 'utf-8')); } catch { return []; }
+}
+
+function saveDynamicTeam(members) {
+  fs.writeFileSync(teamFile, JSON.stringify(members, null, 2), 'utf-8');
+}
+
+// Returns merged team: dynamic (auto-registered) + config.js (manual)
+function getFullTeam() {
+  const dynamic = loadDynamicTeam();
+  const dynamicEmails = new Set(dynamic.map(m => m.email));
+  // Add config.js members that aren't already registered dynamically
+  const fromConfig = team.filter(m => m.email && !dynamicEmails.has(m.email));
+  return [...dynamic, ...fromConfig];
+}
+
+// Register or update a user on login
+function registerUserOnLogin({ email, name, picture }) {
+  const members = loadDynamicTeam();
+  const existing = members.find(m => m.email === email);
+  if (!existing) {
+    members.push({
+      name:     name || email.split('@')[0],
+      email,
+      picture:  picture || '',
+      area:     '',
+      role:     '',
+      joinedAt: new Date().toISOString(),
+    });
+    saveDynamicTeam(members);
+    console.log(`[${timestamp()}] 👤 Novo usuário registrado: ${name} (${email})`);
+  } else if (existing.picture !== picture || existing.name !== name) {
+    // Update name/picture if changed
+    existing.name    = name || existing.name;
+    existing.picture = picture || existing.picture;
+    saveDynamicTeam(members);
+  }
 }
 
 function readState() {
@@ -340,8 +382,9 @@ app.post('/api/state', (req, res) => {
 
 // Team list (no credentials exposed)
 app.get('/api/team', (req, res) => {
-  const safeTeam = team.map(({ name, area, role, email }) => ({
-    name, area, role,
+  const full = getFullTeam();
+  const safeTeam = full.map(({ name, area, role, email, picture }) => ({
+    name, area, role, picture: picture || '',
     hasEmail: !!(email && email.trim()),
   }));
   res.json({ ok: true, team: safeTeam });
@@ -478,6 +521,7 @@ app.get('/auth/callback', async (req, res) => {
       }
 
       req.session.user = { email, name: userInfo.name, picture: userInfo.picture };
+      registerUserOnLogin({ email, name: userInfo.name, picture: userInfo.picture });
       console.log(`[${timestamp()}] ✅ Login: ${email}`);
       res.redirect('/');
     } else {
