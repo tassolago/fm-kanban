@@ -3,6 +3,7 @@
 
 const express    = require('express');
 const cors       = require('cors');
+const session    = require('express-session');
 const nodemailer = require('nodemailer');
 const path       = require('path');
 const fs         = require('fs');
@@ -74,8 +75,83 @@ function writeState(state) {
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
+const SESSION_SECRET = process.env.SESSION_SECRET || 'fm-kanban-secret-2026';
+const ALLOWED_DOMAIN = 'financialmove.com.br';
+
 app.use(cors());
 app.use(express.json());
+app.use(session({
+  secret: SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: { secure: false, maxAge: 7 * 24 * 60 * 60 * 1000 }, // 7 days
+}));
+
+// ── Auth middleware ───────────────────────────────────────────────────────────
+const PUBLIC_PATHS = ['/login', '/auth/login', '/auth/callback', '/health'];
+
+function requireAuth(req, res, next) {
+  if (PUBLIC_PATHS.some(p => req.path.startsWith(p))) return next();
+  if (req.session && req.session.user) return next();
+  if (req.path.startsWith('/api/')) return res.status(401).json({ ok: false, error: 'Não autenticado' });
+  res.redirect('/login');
+}
+app.use(requireAuth);
+
+// ── Login page ────────────────────────────────────────────────────────────────
+app.get('/login', (req, res) => {
+  const error = req.query.error === 'domain'
+    ? '<p style="color:#ef4444;margin-bottom:20px;">Acesso restrito a emails <strong>@financialmove.com.br</strong>. Tente com sua conta corporativa.</p>'
+    : '';
+  res.send(`<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Financial Move — Login</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f0f0f;color:#e0e0e0;font-family:'Inter',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;}
+.card{background:#161616;border:1px solid #2a2a2a;border-radius:16px;padding:48px 40px;width:380px;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,.6);}
+.logo{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:32px;}
+.logo-text{font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;color:#fff;}
+.logo-sub{font-size:11px;color:#555;letter-spacing:.5px;margin-top:2px;}
+h2{font-size:22px;font-weight:700;color:#fff;margin-bottom:8px;}
+p.sub{color:#666;font-size:14px;margin-bottom:32px;line-height:1.6;}
+.btn{display:inline-flex;align-items:center;gap:12px;background:#fff;color:#000;font-weight:600;font-size:15px;padding:14px 28px;border-radius:10px;text-decoration:none;width:100%;justify-content:center;transition:opacity .2s;}
+.btn:hover{opacity:.9}
+.footer{margin-top:24px;font-size:12px;color:#444;}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <svg width="38" height="38" viewBox="0 0 36 36" fill="none"><rect width="36" height="36" rx="7" fill="#000"/><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FFDD00"/><stop offset="100%" stop-color="#FF8C00"/></linearGradient></defs><rect x="5" y="24" width="5" height="8" rx="1.5" fill="url(#g)"/><rect x="12" y="18" width="5" height="14" rx="1.5" fill="url(#g)"/><rect x="19" y="11" width="5" height="21" rx="1.5" fill="url(#g)"/><rect x="26" y="16" width="5" height="16" rx="1.5" fill="url(#g)"/></svg>
+    <div><div class="logo-text">Financial Move</div><div class="logo-sub">GESTÃO DE PROJETOS</div></div>
+  </div>
+  ${error}
+  <h2>Bem-vindo</h2>
+  <p class="sub">Acesse com sua conta corporativa<br/><strong style="color:#FF9800;">@financialmove.com.br</strong></p>
+  <a href="/auth/login" class="btn">
+    <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+    Entrar com Google
+  </a>
+  <div class="footer">Apenas membros da Financial Move</div>
+</div>
+</body></html>`);
+});
+
+// Logout
+app.get('/logout', (req, res) => {
+  req.session.destroy();
+  res.redirect('/login');
+});
+
+// Endpoint para o frontend saber quem está logado
+app.get('/api/me', (req, res) => {
+  res.json({ user: req.session.user || null });
+});
 
 // ── Nodemailer transporter ────────────────────────────────────────────────────
 const transporter = nodemailer.createTransport({
@@ -351,7 +427,23 @@ app.post('/api/notify', async (req, res) => {
 
 // ── Google Meet Integration ───────────────────────────────────────────────────
 
-// Step 1: Redirect to Google OAuth consent screen
+// LOGIN via Google (email scope only)
+app.get('/auth/login', (req, res) => {
+  if (!googleClientId) return res.status(503).send('GOOGLE_CLIENT_ID not configured');
+  const url = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    prompt: 'select_account',
+    scope: [
+      'openid',
+      'https://www.googleapis.com/auth/userinfo.email',
+      'https://www.googleapis.com/auth/userinfo.profile',
+    ],
+    state: 'login',
+  });
+  res.redirect(url);
+});
+
+// DRIVE connection (broader scope)
 app.get('/auth/google', (req, res) => {
   if (!googleClientId) return res.status(503).send('GOOGLE_CLIENT_ID not configured');
   const url = oauth2Client.generateAuthUrl({
@@ -361,21 +453,42 @@ app.get('/auth/google', (req, res) => {
       'https://www.googleapis.com/auth/drive.readonly',
       'https://www.googleapis.com/auth/drive.metadata.readonly',
     ],
+    state: 'drive',
   });
   res.redirect(url);
 });
 
-// Step 2: OAuth callback — save tokens
+// OAuth callback — handles both login and drive connection
 app.get('/auth/callback', async (req, res) => {
+  const { code, state } = req.query;
   try {
-    const { tokens } = await oauth2Client.getToken(req.query.code);
-    saveGoogleTokens(tokens);
+    const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
-    console.log(`[${timestamp()}] ✅ Google OAuth connected`);
-    res.redirect('/?google=connected');
+
+    if (state === 'login') {
+      // Fetch user info to verify domain
+      const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+      const { data: userInfo } = await oauth2.userinfo.get();
+      const email = userInfo.email || '';
+
+      if (!email.endsWith('@' + ALLOWED_DOMAIN)) {
+        console.warn(`[${timestamp()}] ⛔ Login blocked: ${email}`);
+        req.session.destroy();
+        return res.redirect('/login?error=domain');
+      }
+
+      req.session.user = { email, name: userInfo.name, picture: userInfo.picture };
+      console.log(`[${timestamp()}] ✅ Login: ${email}`);
+      res.redirect('/');
+    } else {
+      // Drive connection
+      saveGoogleTokens(tokens);
+      console.log(`[${timestamp()}] ✅ Google Drive connected`);
+      res.redirect('/?google=connected');
+    }
   } catch (err) {
     console.error(`[${timestamp()}] ❌ OAuth error:`, err.message);
-    res.redirect('/?google=error');
+    res.redirect(state === 'login' ? '/login?error=auth' : '/?google=error');
   }
 });
 
