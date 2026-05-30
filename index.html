@@ -327,7 +327,22 @@ select option{background:var(--surface2)}
 <!-- ── Top Bar ──────────────────────────────────────────────────────────────── -->
 <div id="topbar">
   <div class="logo">
-    <div class="logo-mark">FM</div>
+    <div class="logo-mark" style="background:transparent;padding:0;">
+      <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="36" height="36" rx="7" fill="#000"/>
+        <defs>
+          <linearGradient id="bar-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#FFDD00"/>
+            <stop offset="100%" stop-color="#FF8C00"/>
+          </linearGradient>
+        </defs>
+        <!-- 4 bars: ascending heights left to right, last one shorter -->
+        <rect x="5"  y="24" width="5" height="8"  rx="1.5" fill="url(#bar-grad)"/>
+        <rect x="12" y="18" width="5" height="14" rx="1.5" fill="url(#bar-grad)"/>
+        <rect x="19" y="11" width="5" height="21" rx="1.5" fill="url(#bar-grad)"/>
+        <rect x="26" y="16" width="5" height="16" rx="1.5" fill="url(#bar-grad)"/>
+      </svg>
+    </div>
     <div>
       <div class="logo-text">Financial Move</div>
       <div class="logo-sub">Gestão de Projetos</div>
