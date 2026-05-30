@@ -119,6 +119,7 @@ const PORT = process.env.PORT || 3000;
 
 const SESSION_SECRET = process.env.SESSION_SECRET || 'fm-kanban-secret-2026';
 const ALLOWED_DOMAIN = 'financialmove.com.br';
+const ADMIN_EMAILS   = (process.env.ADMIN_EMAILS || 'tassolago@financialmove.com.br').split(',').map(s => s.trim());
 
 app.use(cors());
 app.use(express.json());
@@ -138,6 +139,14 @@ function requireAuth(req, res, next) {
   if (req.path.startsWith('/api/')) return res.status(401).json({ ok: false, error: 'Não autenticado' });
   res.redirect('/login');
 }
+
+function requireAdmin(req, res, next) {
+  const email = req.session?.user?.email || '';
+  if (ADMIN_EMAILS.includes(email)) return next();
+  if (req.path.startsWith('/api/')) return res.status(403).json({ ok: false, error: 'Acesso restrito a admins' });
+  res.status(403).send('<h2 style="font-family:sans-serif;color:#ef4444;padding:40px;">Acesso restrito.</h2>');
+}
+
 app.use(requireAuth);
 
 // ── Login page ────────────────────────────────────────────────────────────────
@@ -669,6 +678,190 @@ ${transcript}`,
     console.error(`[${timestamp()}] ❌ Meeting process error:`, err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
+});
+
+// ── Admin routes ─────────────────────────────────────────────────────────────
+
+// Admin page
+app.get('/admin', requireAdmin, (req, res) => {
+  const depts = ['Dados','Financeiro','Marketing','CS','Comercial','Tech','Operações','Infra','Jurídico','Imprensa','CEO'];
+  res.send(`<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>FM Kanban — Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f0f0f;color:#e0e0e0;font-family:'Inter',sans-serif;min-height:100vh;}
+.topbar{display:flex;align-items:center;gap:16px;padding:0 28px;height:60px;background:#161616;border-bottom:1px solid #2a2a2a;}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
+.logo-text{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;color:#fff;}
+.badge{background:#FF9800;color:#000;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.5px;}
+.back{margin-left:auto;font-size:13px;color:#666;text-decoration:none;padding:6px 14px;border:1px solid #333;border-radius:6px;}
+.back:hover{color:#FF9800;border-color:#FF9800;}
+.container{max-width:1000px;margin:36px auto;padding:0 24px;}
+h1{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;margin-bottom:6px;}
+.sub{color:#666;font-size:14px;margin-bottom:28px;}
+.card{background:#161616;border:1px solid #2a2a2a;border-radius:12px;overflow:hidden;}
+table{width:100%;border-collapse:collapse;}
+th{padding:12px 16px;text-align:left;font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid #222;font-weight:500;}
+td{padding:12px 16px;border-bottom:1px solid #1e1e1e;font-size:14px;vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:#1a1a1a;}
+.avatar{width:34px;height:34px;border-radius:50%;object-fit:cover;background:#252525;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#888;flex-shrink:0;}
+.user-cell{display:flex;align-items:center;gap:10px;}
+.user-name{font-weight:500;color:#e0e0e0;}
+.user-email{font-size:12px;color:#555;margin-top:1px;}
+.joined{font-size:12px;color:#555;}
+select,input[type=text]{background:#1e1e1e;border:1px solid #2a2a2a;border-radius:6px;color:#e0e0e0;font-size:13px;padding:6px 10px;font-family:inherit;outline:none;transition:border .2s;}
+select:focus,input[type=text]:focus{border-color:#FF9800;}
+select{cursor:pointer;}
+.btn-save{padding:6px 14px;background:#FF9800;border:none;border-radius:6px;color:#000;font-size:12px;font-weight:700;cursor:pointer;opacity:0;transition:opacity .2s;}
+.btn-save.visible{opacity:1;}
+.saved{font-size:12px;color:#22c55e;opacity:0;transition:opacity .5s;}
+.tag-admin{font-size:10px;background:#FF980020;color:#FF9800;border:1px solid #FF980040;padding:2px 7px;border-radius:4px;margin-left:6px;}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a href="/" class="logo">
+    <svg width="30" height="30" viewBox="0 0 36 36" fill="none"><rect width="36" height="36" rx="7" fill="#000"/><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FFDD00"/><stop offset="100%" stop-color="#FF8C00"/></linearGradient></defs><rect x="5" y="24" width="5" height="8" rx="1.5" fill="url(#g)"/><rect x="12" y="18" width="5" height="14" rx="1.5" fill="url(#g)"/><rect x="19" y="11" width="5" height="21" rx="1.5" fill="url(#g)"/><rect x="26" y="16" width="5" height="16" rx="1.5" fill="url(#g)"/></svg>
+    <span class="logo-text">Financial Move</span>
+  </a>
+  <span class="badge">ADMIN</span>
+  <a href="/" class="back">← Voltar ao Kanban</a>
+</div>
+
+<div class="container">
+  <h1>Gerenciamento de Usuários</h1>
+  <p class="sub">Usuários registrados automaticamente ao fazer login. Configure setor e cargo para aparecerem corretamente no Kanban.</p>
+
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>Usuário</th>
+          <th>Setor</th>
+          <th>Cargo</th>
+          <th>Desde</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr><td colspan="5" style="text-align:center;color:#555;padding:32px;">Carregando…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const DEPTS = ${JSON.stringify(depts)};
+
+async function load() {
+  const r = await fetch('/api/admin/team');
+  const { team } = await r.json();
+  const tbody = document.getElementById('tbody');
+  if (!team.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#555;padding:32px;">Nenhum usuário registrado ainda.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = team.map((m, i) => {
+    const isAdmin = ${JSON.stringify(ADMIN_EMAILS)}.includes(m.email);
+    const joined = m.joinedAt ? new Date(m.joinedAt).toLocaleDateString('pt-BR') : '—';
+    const avatar = m.picture
+      ? \`<img src="\${m.picture}" class="avatar" referrerpolicy="no-referrer"/>\`
+      : \`<div class="avatar">\${(m.name||'?')[0].toUpperCase()}</div>\`;
+    return \`<tr id="row-\${i}">
+      <td>
+        <div class="user-cell">
+          \${avatar}
+          <div>
+            <div class="user-name">\${m.name || '—'}\${isAdmin ? '<span class="tag-admin">ADMIN</span>' : ''}</div>
+            <div class="user-email">\${m.email}</div>
+          </div>
+        </div>
+      </td>
+      <td>
+        <select id="area-\${i}" onchange="markDirty(\${i})">
+          <option value="">— Sem setor —</option>
+          \${DEPTS.map(d => \`<option value="\${d}" \${d === m.area ? 'selected' : ''}>\${d}</option>\`).join('')}
+        </select>
+      </td>
+      <td>
+        <input type="text" id="role-\${i}" value="\${m.role || ''}" placeholder="Ex: Analista" style="width:160px;" oninput="markDirty(\${i})"/>
+      </td>
+      <td class="joined">\${joined}</td>
+      <td>
+        <button class="btn-save" id="save-\${i}" onclick="save(\${i}, '\${m.email}')">Salvar</button>
+        <span class="saved" id="saved-\${i}">✓ Salvo</span>
+      </td>
+    </tr>\`;
+  }).join('');
+}
+
+function markDirty(i) {
+  document.getElementById('save-' + i).classList.add('visible');
+  document.getElementById('saved-' + i).style.opacity = 0;
+}
+
+async function save(i, email) {
+  const area = document.getElementById('area-' + i).value;
+  const role = document.getElementById('role-' + i).value.trim();
+  const btn  = document.getElementById('save-' + i);
+  btn.textContent = '…';
+  btn.disabled = true;
+  await fetch('/api/admin/team/' + encodeURIComponent(email), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ area, role }),
+  });
+  btn.textContent = 'Salvar';
+  btn.disabled = false;
+  btn.classList.remove('visible');
+  const saved = document.getElementById('saved-' + i);
+  saved.style.opacity = 1;
+  setTimeout(() => { saved.style.opacity = 0; }, 2000);
+}
+
+load();
+</script>
+</body></html>`);
+});
+
+// API: list all team members with full details (admin only)
+app.get('/api/admin/team', requireAdmin, (req, res) => {
+  const dynamic = loadDynamicTeam();
+  const dynamicEmails = new Set(dynamic.map(m => m.email));
+  // Include config.js members not yet in dynamic team
+  const fromConfig = team.filter(m => m.email && !dynamicEmails.has(m.email)).map(m => ({
+    ...m, joinedAt: null, picture: '',
+  }));
+  res.json({ ok: true, team: [...dynamic, ...fromConfig] });
+});
+
+// API: update a member's area and role (admin only)
+app.post('/api/admin/team/:email', requireAdmin, (req, res) => {
+  const email = decodeURIComponent(req.params.email);
+  const { area, role } = req.body;
+  const members = loadDynamicTeam();
+  const member = members.find(m => m.email === email);
+  if (!member) {
+    // Add from config.js if not yet in dynamic team
+    const fromConfig = team.find(m => m.email === email);
+    if (fromConfig) {
+      members.push({ ...fromConfig, area: area ?? fromConfig.area, role: role ?? fromConfig.role, joinedAt: null, picture: '' });
+    } else {
+      return res.status(404).json({ ok: false, error: 'Usuário não encontrado' });
+    }
+  } else {
+    if (area !== undefined) member.area = area;
+    if (role !== undefined) member.role = role;
+  }
+  saveDynamicTeam(members);
+  console.log(`[${timestamp()}] ✏️  Admin update: ${email} → setor=${area} cargo=${role}`);
+  res.json({ ok: true });
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────

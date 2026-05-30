@@ -358,6 +358,7 @@ select option{background:var(--surface2)}
     <span id="serverLabel" style="transition:color .4s">Verificando…</span>
   </div>
   <div id="user-info" style="display:flex;align-items:center;gap:8px;margin-left:8px;"></div>
+  <div id="admin-link"></div>
 
   <button class="btn-meet" id="btn-meet" onclick="openMeetModal()" title="Importar tarefas de reunião">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 10l4.553-2.069A1 1 0 0121 8.862v6.276a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/></svg>
@@ -1216,6 +1217,8 @@ function createMeetCards() {
 }
 
 // ── Show logged-in user ───────────────────────────────────────────────────────
+const ADMIN_EMAILS_CLIENT = ['tassolago@financialmove.com.br'];
+
 fetch('/api/me').then(r => r.json()).then(({ user }) => {
   if (!user) return;
   const el = document.getElementById('user-info');
@@ -1223,6 +1226,10 @@ fetch('/api/me').then(r => r.json()).then(({ user }) => {
     ${user.picture ? `<img src="${user.picture}" style="width:26px;height:26px;border-radius:50%;object-fit:cover;" referrerpolicy="no-referrer"/>` : ''}
     <span style="font-size:12px;color:#888;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${user.name || user.email}</span>
     <a href="/logout" style="font-size:11px;color:#555;text-decoration:none;padding:3px 8px;border:1px solid #333;border-radius:4px;white-space:nowrap;" title="Sair">Sair</a>`;
+  if (ADMIN_EMAILS_CLIENT.includes(user.email)) {
+    document.getElementById('admin-link').innerHTML =
+      `<a href="/admin" style="font-size:11px;color:#FF9800;text-decoration:none;padding:3px 8px;border:1px solid #FF980050;border-radius:4px;white-space:nowrap;">⚙ Admin</a>`;
+  }
 }).catch(() => {});
 
 // Check if returning from Google OAuth
