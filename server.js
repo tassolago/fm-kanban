@@ -735,8 +735,11 @@ select{cursor:pointer;}
 </div>
 
 <div class="container">
-  <h1>Gerenciamento de Usuários</h1>
-  <p class="sub">Usuários registrados automaticamente ao fazer login. Configure setor e cargo para aparecerem corretamente no Kanban.</p>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+    <h1>Gerenciamento de Usuários</h1>
+    <button onclick="openAdd()" style="display:flex;align-items:center;gap:6px;padding:9px 16px;background:#FF9800;border:none;border-radius:8px;color:#000;font-size:13px;font-weight:700;cursor:pointer;">+ Adicionar usuário</button>
+  </div>
+  <p class="sub">Usuários registrados ao fazer login. Adicione manualmente quem ainda não logou.</p>
 
   <div class="card">
     <table>
@@ -826,7 +829,58 @@ async function save(i, email) {
 }
 
 load();
+
+function openAdd() { document.getElementById('add-modal').style.display='flex'; document.getElementById('add-email').focus(); }
+function closeAdd() { document.getElementById('add-modal').style.display='none'; document.getElementById('add-form').reset(); document.getElementById('add-error').textContent=''; }
+
+document.getElementById('add-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('add-email').value.trim().toLowerCase();
+  const name  = document.getElementById('add-name').value.trim();
+  const area  = document.getElementById('add-area').value;
+  const role  = document.getElementById('add-role').value.trim();
+  const errEl = document.getElementById('add-error');
+  if (!email.endsWith('@financialmove.com.br')) { errEl.textContent='Email deve ser @financialmove.com.br'; return; }
+  const btn = e.target.querySelector('button[type=submit]');
+  btn.textContent='Salvando…'; btn.disabled=true;
+  const r = await fetch('/api/admin/team/add', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email,name,area,role}) });
+  const data = await r.json();
+  btn.textContent='Adicionar'; btn.disabled=false;
+  if (!data.ok) { errEl.textContent = data.error||'Erro ao adicionar.'; return; }
+  closeAdd(); load();
+});
 </script>
+
+<div id="add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center;">
+  <div style="background:#161616;border:1px solid #2a2a2a;border-radius:14px;padding:32px;width:420px;max-width:95vw;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+      <span style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:16px;">Adicionar usuário</span>
+      <button onclick="closeAdd()" style="background:none;border:none;color:#666;font-size:22px;cursor:pointer;line-height:1;">×</button>
+    </div>
+    <form id="add-form" style="display:flex;flex-direction:column;gap:14px;">
+      <div>
+        <label style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.6px;display:block;margin-bottom:5px;">Email corporativo *</label>
+        <input id="add-email" type="email" placeholder="nome@financialmove.com.br" required style="width:100%;"/>
+      </div>
+      <div>
+        <label style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.6px;display:block;margin-bottom:5px;">Nome completo *</label>
+        <input id="add-name" type="text" placeholder="Ex: João Silva" required style="width:100%;"/>
+      </div>
+      <div style="display:flex;gap:12px;">
+        <div style="flex:1;">
+          <label style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.6px;display:block;margin-bottom:5px;">Setor</label>
+          <select id="add-area" style="width:100%;"><option value="">— Sem setor —</option>${depts.map(d=>`<option value="${d}">${d}</option>`).join('')}</select>
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.6px;display:block;margin-bottom:5px;">Cargo</label>
+          <input id="add-role" type="text" placeholder="Ex: Analista" style="width:100%;"/>
+        </div>
+      </div>
+      <p id="add-error" style="color:#ef4444;font-size:13px;min-height:18px;margin:0;"></p>
+      <button type="submit" style="padding:11px;background:#FF9800;border:none;border-radius:8px;color:#000;font-size:14px;font-weight:700;cursor:pointer;">Adicionar</button>
+    </form>
+  </div>
+</div>
 </body></html>`);
 });
 
@@ -839,6 +893,19 @@ app.get('/api/admin/team', requireAdmin, (req, res) => {
     ...m, joinedAt: null, picture: '',
   }));
   res.json({ ok: true, team: [...dynamic, ...fromConfig] });
+});
+
+// API: manually add a member (admin only)
+app.post('/api/admin/team/add', requireAdmin, (req, res) => {
+  const { email, name, area, role } = req.body;
+  if (!email || !name) return res.status(400).json({ ok: false, error: 'Email e nome são obrigatórios' });
+  if (!email.endsWith('@' + ALLOWED_DOMAIN)) return res.status(400).json({ ok: false, error: 'Email deve ser @' + ALLOWED_DOMAIN });
+  const members = loadDynamicTeam();
+  if (members.find(m => m.email === email)) return res.status(409).json({ ok: false, error: 'Usuário já cadastrado' });
+  members.push({ name, email, area: area || '', role: role || '', picture: '', joinedAt: null });
+  saveDynamicTeam(members);
+  console.log(`[${timestamp()}] ➕ Admin adicionou: ${name} (${email})`);
+  res.json({ ok: true });
 });
 
 // API: update a member's area and role (admin only)
