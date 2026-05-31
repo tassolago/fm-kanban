@@ -541,7 +541,8 @@ function seedDeptColumns() {
   if (!state.deptColumns) state.deptColumns = {};
   if (!state.deptColumns.Marketing) {
     state.deptColumns.Marketing = MARKETING_COLUMNS.map(c => ({...c}));
-    saveStateToServer();
+    // NÃO salva aqui — será salvo junto com a próxima ação do usuário
+    // (evita sobrescrever dados reais se o servidor retornou estado vazio por erro transitório)
   }
 }
 
@@ -631,7 +632,10 @@ async function pollState() {
 
 // ── Default seeds ─────────────────────────────────────────────────────────────
 function seedDefaults() {
+  // Nunca sobrescreve dados existentes. Seeds só rodam se o board está completamente vazio
+  // E apenas se o servidor confirmou que está online (estado veio do servidor, não do fallback)
   if (state.cards.length > 0) return;
+  if (!serverOnline) return; // segurança: não cria seeds se não conseguiu carregar do servidor
   const seeds = [
     { dept:'Dados',     title:'Criar BI',              column:'andamento', priority:'Alta',  description:'Desenvolver dashboard de Business Intelligence integrado.' },
     { dept:'Marketing', title:'Funil TPW R$97',         column:'criacao',   priority:'Alta',  description:'Estruturar funil de vendas completo para o produto TPW a R$97.' },

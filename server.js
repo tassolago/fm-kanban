@@ -49,8 +49,9 @@ oauth2Client.on('tokens', (tokens) => {
 });
 
 // ── JSON file state ───────────────────────────────────────────────────────────
-const dataDir  = path.join(__dirname, 'data');
+const dataDir   = path.join(__dirname, 'data');
 const stateFile = path.join(dataDir, 'kanban.json');
+const backupFile = path.join(dataDir, 'kanban.backup.json');
 const teamFile  = path.join(dataDir, 'team.json');
 
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
@@ -101,16 +102,42 @@ function registerUserOnLogin({ email, name, picture }) {
 
 function readState() {
   try {
-    return JSON.parse(fs.readFileSync(stateFile, 'utf-8'));
+    const raw = JSON.parse(fs.readFileSync(stateFile, 'utf-8'));
+    // Valida que o arquivo não está corrompido/vazio
+    if (raw && raw.state && Array.isArray(raw.state.cards)) return raw;
+    throw new Error('invalid state format');
   } catch {
+    // Tenta recuperar do backup
+    try {
+      const backup = JSON.parse(fs.readFileSync(backupFile, 'utf-8'));
+      if (backup && backup.state && Array.isArray(backup.state.cards) && backup.state.cards.length > 0) {
+        console.warn(`[${timestamp()}] ⚠️  Estado principal inválido — recuperando do backup (${backup.state.cards.length} cards)`);
+        return backup;
+      }
+    } catch {}
     return { state: { cards: [], nextId: 1 }, updated_at: Date.now() };
   }
 }
 
 function writeState(state) {
   const updated_at = Date.now();
-  fs.writeFileSync(stateFile, JSON.stringify({ state, updated_at }), 'utf-8');
+  const payload = JSON.stringify({ state, updated_at });
+  // Só sobrescreve se o novo estado tiver cards OU se o estado atual também já está vazio
+  const current = readStateRaw();
+  if (current && current.state && current.state.cards && current.state.cards.length > 0 && state.cards.length === 0) {
+    console.warn(`[${timestamp()}] ⚠️  Bloqueado: tentativa de salvar estado vazio sobre ${current.state.cards.length} cards existentes`);
+    return current.updated_at;
+  }
+  // Salva backup antes de sobrescrever (se há dados reais)
+  if (state.cards && state.cards.length > 0) {
+    try { fs.writeFileSync(backupFile, payload, 'utf-8'); } catch {}
+  }
+  fs.writeFileSync(stateFile, payload, 'utf-8');
   return updated_at;
+}
+
+function readStateRaw() {
+  try { return JSON.parse(fs.readFileSync(stateFile, 'utf-8')); } catch { return null; }
 }
 
 // ── Express app ───────────────────────────────────────────────────────────────
@@ -373,6 +400,37 @@ app.get('/', (req, res) => {
 // Health check
 app.get('/health', (req, res) => {
   res.json({ ok: true });
+});
+
+// Diagnóstico — mostra quantos cards estão salvos no servidor (admin only)
+app.get('/api/debug/state', requireAdmin, (req, res) => {
+  const { state, updated_at } = readState();
+  const backupExists = fs.existsSync(backupFile);
+  let backupCards = 0;
+  try { backupCards = JSON.parse(fs.readFileSync(backupFile, 'utf-8')).state.cards.length; } catch {}
+  res.json({
+    cards: state.cards.length,
+    nextId: state.nextId,
+    deptColumns: Object.keys(state.deptColumns || {}),
+    updated_at: new Date(updated_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+    backupExists,
+    backupCards,
+  });
+});
+
+// Recuperar backup (admin only)
+app.post('/api/debug/restore-backup', requireAdmin, (req, res) => {
+  try {
+    const backup = JSON.parse(fs.readFileSync(backupFile, 'utf-8'));
+    if (!backup || !backup.state || !Array.isArray(backup.state.cards)) {
+      return res.status(400).json({ ok: false, error: 'Backup inválido ou vazio' });
+    }
+    fs.writeFileSync(stateFile, JSON.stringify(backup), 'utf-8');
+    console.log(`[${timestamp()}] 🔄 Estado restaurado do backup: ${backup.state.cards.length} cards`);
+    res.json({ ok: true, cards: backup.state.cards.length });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 // Get kanban state
