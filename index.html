@@ -354,6 +354,11 @@ select option{background:var(--surface2)}
   <div id="user-info" style="display:flex;align-items:center;gap:8px;margin-left:8px;"></div>
   <div id="admin-link"></div>
 
+  <button id="notif-btn" onclick="openNotifPanel()" title="Aprovações de prazo" style="display:none;position:relative;background:transparent;border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text2);padding:7px 10px;transition:all .2s;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+    <span id="notif-badge" style="display:none;position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;">0</span>
+  </button>
+
   <button class="btn-meet" id="btn-meet" onclick="openMeetModal()" title="Importar tarefas de reunião">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 10l4.553-2.069A1 1 0 0121 8.862v6.276a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/></svg>
     Reuniões
@@ -1050,6 +1055,7 @@ function openModal(cardId, dept, defaultCol) {
     renderComments(card.comments||[]);
   }
 
+  applyDateLock();
   document.getElementById('modal-overlay').classList.add('open');
   setTimeout(() => document.getElementById('modal-title-input').focus(), 100);
 }
@@ -1360,6 +1366,226 @@ if (new URLSearchParams(location.search).get('google') === 'connected') {
   setInterval(pollState, 15000);
   setInterval(checkServer, 60000);
 })();
+</script>
+
+<!-- ── Painel de Aprovações (drawer) ──────────────────────────────────────── -->
+<div id="notif-backdrop" onclick="closeNotifPanel()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:298;"></div>
+<div id="notif-panel" style="position:fixed;top:0;right:-420px;width:420px;max-width:92vw;height:100vh;background:var(--surface);border-left:1px solid var(--border);z-index:299;transition:right .28s ease;display:flex;flex-direction:column;box-shadow:-8px 0 32px rgba(0,0,0,.5);">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 22px;border-bottom:1px solid var(--border);flex-shrink:0;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FF9800" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+      <span style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;color:#fff;">Aprovações de prazo</span>
+    </div>
+    <button onclick="closeNotifPanel()" style="background:none;border:none;color:#666;font-size:22px;cursor:pointer;line-height:1;">×</button>
+  </div>
+  <div id="notif-body" style="flex:1;overflow-y:auto;padding:18px 18px;"></div>
+</div>
+
+<!-- ── Overlay: solicitar mudança de prazo ───────────────────────────────── -->
+<div id="datereq-overlay" onclick="if(event.target===this)closeDateReqForm()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:310;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;width:440px;max-width:100%;padding:26px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+      <span style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:16px;color:#fff;">Solicitar mudança de prazo</span>
+      <button onclick="closeDateReqForm()" style="background:none;border:none;color:#666;font-size:22px;cursor:pointer;line-height:1;">×</button>
+    </div>
+    <div style="font-size:13px;color:var(--text3);line-height:1.6;margin-bottom:18px;">Este card está atrasado. A mudança de prazo precisa de aprovação do chefe do setor e depois do COO.</div>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div>
+        <label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;display:block;margin-bottom:6px;">Novo prazo *</label>
+        <input type="date" id="datereq-newdate" style="width:100%;"/>
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;display:block;margin-bottom:6px;">Justificativa *</label>
+        <textarea id="datereq-reason" placeholder="Por que precisa de mais prazo?" style="width:100%;min-height:80px;resize:vertical;line-height:1.5;"></textarea>
+      </div>
+      <p id="datereq-error" style="color:var(--red);font-size:13px;min-height:16px;margin:0;"></p>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="closeDateReqForm()" class="btn-cancel">Cancelar</button>
+        <button onclick="submitDateReq()" class="btn-save" id="datereq-submit">Enviar solicitação</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Fluxo de aprovação de prazo (frontend) ──────────────────────────────────────
+let dateReqCardId = null;
+
+function isCardOverdue(card) {
+  if (!card || !card.dueDate) return false;
+  const cols = getColumnsForDept(card.dept || currentDept);
+  const lastColId = cols[cols.length - 1]?.id;
+  const today = new Date(); today.setHours(0,0,0,0);
+  return new Date(card.dueDate + 'T00:00') < today && card.column !== lastColId;
+}
+// Pode mudar prazo de card atrasado livremente? Só COO (final) e admin.
+function canEditOverdueDate() {
+  return !!(currentUser && (currentUser.isFinal || currentUser.isAdmin));
+}
+
+// Trava o campo de data no modal se o card estiver atrasado e o usuário não for COO/admin
+function applyDateLock() {
+  const dueInput = document.getElementById('modal-due');
+  const holder = document.getElementById('datelock-holder');
+  if (holder) holder.remove();
+  if (!dueInput) return;
+  dueInput.disabled = false;
+  dueInput.style.opacity = '1';
+
+  if (editingCard && isCardOverdue(editingCard) && !canEditOverdueDate()) {
+    dueInput.disabled = true;
+    dueInput.style.opacity = '.55';
+    const div = document.createElement('div');
+    div.id = 'datelock-holder';
+    div.style.cssText = 'margin-top:8px;';
+    div.innerHTML = `
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--red);margin-bottom:6px;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        Card atrasado — prazo travado
+      </div>
+      <button type="button" onclick="openDateReqForm()" style="width:100%;padding:9px;background:var(--orange-glow);border:1px solid var(--orange);border-radius:6px;color:var(--orange);font-size:12px;font-weight:600;cursor:pointer;">Solicitar mudança de prazo</button>`;
+    dueInput.parentElement.appendChild(div);
+  }
+}
+
+function openDateReqForm() {
+  if (!editingCard) return;
+  dateReqCardId = editingCard.id;
+  document.getElementById('datereq-newdate').value = editingCard.dueDate || '';
+  document.getElementById('datereq-reason').value = '';
+  document.getElementById('datereq-error').textContent = '';
+  document.getElementById('datereq-overlay').style.display = 'flex';
+}
+function closeDateReqForm() { document.getElementById('datereq-overlay').style.display = 'none'; }
+
+async function submitDateReq() {
+  const newDate = document.getElementById('datereq-newdate').value;
+  const reason  = document.getElementById('datereq-reason').value.trim();
+  const err = document.getElementById('datereq-error');
+  if (!newDate) { err.textContent = 'Escolha o novo prazo.'; return; }
+  if (!reason)  { err.textContent = 'Escreva a justificativa.'; return; }
+  const btn = document.getElementById('datereq-submit');
+  btn.textContent = 'Enviando…'; btn.disabled = true;
+  try {
+    const r = await fetch('/api/date-requests', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ cardId: dateReqCardId, newDate, reason }),
+    });
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.error);
+    closeDateReqForm(); closeModal();
+    toast('Solicitação enviada para aprovação', 'success');
+  } catch(e) {
+    err.textContent = e.message || 'Erro ao enviar.';
+  } finally {
+    btn.textContent = 'Enviar solicitação'; btn.disabled = false;
+  }
+}
+
+// ── Sininho / painel ────────────────────────────────────────────────────────────
+async function refreshNotifCount() {
+  if (!currentUser) return;
+  const canApprove = currentUser.headOf || currentUser.isFinal || currentUser.isAdmin;
+  const btn = document.getElementById('notif-btn');
+  if (!canApprove) { btn.style.display = 'none'; return; }
+  btn.style.display = 'inline-flex';
+  try {
+    const r = await fetch('/api/date-requests/count');
+    const { count } = await r.json();
+    const badge = document.getElementById('notif-badge');
+    if (count > 0) { badge.style.display = 'block'; badge.textContent = count; }
+    else badge.style.display = 'none';
+  } catch {}
+}
+
+async function openNotifPanel() {
+  document.getElementById('notif-backdrop').style.display = 'block';
+  document.getElementById('notif-panel').style.right = '0';
+  const body = document.getElementById('notif-body');
+  body.innerHTML = '<div style="color:#666;text-align:center;padding:30px;font-size:13px;">Carregando…</div>';
+  try {
+    const r = await fetch('/api/date-requests');
+    const data = await r.json();
+    renderNotifs(data);
+  } catch {
+    body.innerHTML = '<div style="color:#ef4444;text-align:center;padding:30px;font-size:13px;">Erro ao carregar.</div>';
+  }
+}
+function closeNotifPanel() {
+  document.getElementById('notif-panel').style.right = '-420px';
+  document.getElementById('notif-backdrop').style.display = 'none';
+}
+
+function reqCardHtml(r, opts={}) {
+  const fmt = d => d ? new Date(d+'T00:00').toLocaleDateString('pt-BR') : '—';
+  const statusMap = {
+    pending_head:  ['Aguardando chefe', '#FF9800'],
+    pending_final: ['Aguardando COO', '#a855f7'],
+    approved:      ['Aprovado', '#22c55e'],
+    rejected:      ['Rejeitado', '#ef4444'],
+  };
+  const [stLabel, stColor] = statusMap[r.status] || ['—', '#666'];
+  return `
+  <div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid ${stColor};border-radius:10px;padding:14px 16px;margin-bottom:10px;">
+    <div style="font-weight:600;font-size:13px;color:#fff;margin-bottom:4px;">${escHtml(r.cardTitle)}</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">${escHtml(r.cardDept||'—')} · por ${escHtml(r.requestedByName)}</div>
+    <div style="display:flex;gap:14px;font-size:12px;margin-bottom:8px;">
+      <span style="color:#f87171;">De: ${fmt(r.oldDate)}</span>
+      <span style="color:#4ade80;">Para: ${fmt(r.newDate)}</span>
+    </div>
+    ${r.reason ? `<div style="font-size:12px;color:var(--text2);font-style:italic;background:var(--surface);border-radius:6px;padding:8px 10px;margin-bottom:8px;">"${escHtml(r.reason)}"</div>` : ''}
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <span style="font-size:10px;font-weight:600;color:${stColor};text-transform:uppercase;letter-spacing:.4px;">${stLabel}</span>
+      ${opts.actions ? `
+        <div style="display:flex;gap:6px;">
+          <button onclick="rejectReq(${r.id})" style="padding:6px 12px;background:transparent;border:1px solid rgba(239,68,68,.4);border-radius:6px;color:#f87171;font-size:12px;font-weight:600;cursor:pointer;">Rejeitar</button>
+          <button onclick="approveReq(${r.id})" style="padding:6px 12px;background:#22c55e;border:none;border-radius:6px;color:#000;font-size:12px;font-weight:700;cursor:pointer;">Aprovar</button>
+        </div>` : ''}
+    </div>
+  </div>`;
+}
+
+function renderNotifs(data) {
+  const body = document.getElementById('notif-body');
+  let html = '';
+  if (data.toApprove && data.toApprove.length) {
+    html += `<div style="font-size:11px;color:var(--orange);text-transform:uppercase;letter-spacing:.8px;font-weight:600;margin-bottom:10px;">Aguardando sua aprovação (${data.toApprove.length})</div>`;
+    html += data.toApprove.map(r => reqCardHtml(r, { actions:true })).join('');
+  }
+  if (data.mine && data.mine.length) {
+    html += `<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;font-weight:600;margin:18px 0 10px;">Minhas solicitações</div>`;
+    html += data.mine.map(r => reqCardHtml(r)).join('');
+  }
+  if (data.history && data.history.length) {
+    html += `<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;font-weight:600;margin:18px 0 10px;">Histórico recente</div>`;
+    html += data.history.map(r => reqCardHtml(r)).join('');
+  }
+  if (!html) html = '<div style="color:#666;text-align:center;padding:40px 20px;font-size:13px;">Nenhuma solicitação por aqui.</div>';
+  body.innerHTML = html;
+}
+
+async function approveReq(id) {
+  try {
+    const r = await fetch('/api/date-requests/'+id+'/approve', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.error);
+    toast(data.status === 'approved' ? 'Aprovado — prazo atualizado' : 'Aprovado — enviado ao COO', 'success');
+    openNotifPanel(); refreshNotifCount(); pollState();
+  } catch(e) { toast(e.message||'Erro ao aprovar', 'error'); }
+}
+async function rejectReq(id) {
+  const reason = prompt('Motivo da rejeição (opcional):') || '';
+  try {
+    const r = await fetch('/api/date-requests/'+id+'/reject', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ reason }) });
+    const data = await r.json();
+    if (!data.ok) throw new Error(data.error);
+    toast('Solicitação rejeitada', 'info');
+    openNotifPanel(); refreshNotifCount();
+  } catch(e) { toast(e.message||'Erro ao rejeitar', 'error'); }
+}
+
+// Inicializa sininho após carregar o usuário
+setTimeout(() => { refreshNotifCount(); setInterval(refreshNotifCount, 45000); }, 1500);
 </script>
 </body>
 </html>

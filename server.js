@@ -141,6 +141,28 @@ function readStateRaw() {
   try { return JSON.parse(fs.readFileSync(stateFile, 'utf-8')); } catch { return null; }
 }
 
+// ── Solicitações de mudança de prazo ────────────────────────────────────────────
+const dateReqFile = path.join(dataDir, 'date-requests.json');
+function loadDateRequests() {
+  try { return JSON.parse(fs.readFileSync(dateReqFile, 'utf-8')); } catch { return []; }
+}
+function saveDateRequests(reqs) {
+  try { fs.writeFileSync(dateReqFile, JSON.stringify(reqs, null, 2), 'utf-8'); } catch {}
+}
+// Contexto/papel do usuário no fluxo de aprovação
+function userContext(email) {
+  const e = (email || '').toLowerCase();
+  const m = getFullTeam().find(x => (x.email || '').toLowerCase() === e);
+  return {
+    email:   e,
+    name:    m?.name || e,
+    area:    m?.area || '',
+    headOf:  m?.headOf || '',                 // setor que chefia ('' = não é chefe)
+    isFinal: e === FINAL_APPROVER,            // aprovador final (COO)
+    isAdmin: ADMIN_EMAILS.map(a=>a.toLowerCase()).includes(e),
+  };
+}
+
 // ── Express app ───────────────────────────────────────────────────────────────
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -148,6 +170,8 @@ const PORT = process.env.PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'fm-kanban-secret-2026';
 const ALLOWED_DOMAIN = 'financialmove.com.br';
 const ADMIN_EMAILS   = (process.env.ADMIN_EMAILS || 'tassolago@financialmove.com.br').split(',').map(s => s.trim());
+// Aprovador final do fluxo de prazo (após o chefe do setor). Default: COO Victor Lago.
+const FINAL_APPROVER = (process.env.FINAL_APPROVER_EMAIL || 'financeiro@financialmove.com.br').toLowerCase().trim();
 
 app.use(cors());
 app.use(express.json());
@@ -245,8 +269,9 @@ app.get('/api/me', (req, res) => {
     email, name, picture,
     area:   member?.area || '',
     role:   member?.role || '',
-    headOf: member?.headOf || '',       // setor que ele chefia ('' = subordinado)
+    headOf: member?.headOf || '',                       // setor que ele chefia ('' = subordinado)
     isAdmin: ADMIN_EMAILS.includes(email),
+    isFinal: (email || '').toLowerCase() === FINAL_APPROVER, // aprovador final (COO)
   }});
 });
 
@@ -449,6 +474,58 @@ function buildDeadlineEmail({ card, type, diffDays }) {
     body,
     ctaLabel: 'Abrir no Kanban →',
     ctaUrl:   appUrl,
+  });
+}
+
+function fmtDate(d) {
+  return d ? new Date(d + 'T00:00').toLocaleDateString('pt-BR') : '—';
+}
+
+// Email: solicitação chegou para o aprovador (chefe ou COO)
+function buildDateReqToApprover({ reqObj, card, approverRole }) {
+  const quem = approverRole === 'final' ? 'aprovação final' : 'sua aprovação';
+  const body = `
+    <div class="message">
+      <strong style="color:#FF9800;">${reqObj.requestedByName}</strong> solicitou mudança de prazo de um card
+      ${approverRole === 'final' ? 'e o chefe do setor já aprovou. Falta a ' + quem + '.' : 'e aguarda ' + quem + '.'}
+    </div>
+    ${cardMetaHtml({ ...card, status: card.status || card.column })}
+    <div class="card-box" style="border-left-color:#FF9800;">
+      <div class="meta-row">
+        <div class="meta-item"><div class="label">Prazo atual</div><div class="value" style="color:#f87171;">${fmtDate(reqObj.oldDate)}</div></div>
+        <div class="meta-item"><div class="label">Novo prazo pedido</div><div class="value" style="color:#4ade80;">${fmtDate(reqObj.newDate)}</div></div>
+      </div>
+      ${reqObj.reason ? `<div style="margin-top:12px;"><div class="label">Justificativa</div><div class="value" style="font-weight:400;color:#ccc;font-size:14px;">${reqObj.reason}</div></div>` : ''}
+    </div>
+    <div class="message">Abra o Kanban e clique no sininho 🔔 para aprovar ou rejeitar.</div>`;
+  return buildEmailHtml({
+    subject:  `[Kanban FM] Aprovação de prazo: ${card.title}`,
+    headline: `🔔 Solicitação de mudança de prazo`,
+    body, ctaLabel: 'Abrir no Kanban →', ctaUrl: appUrl,
+  });
+}
+
+// Email: resultado para quem solicitou (aprovado/rejeitado)
+function buildDateReqOutcome({ reqObj, card, outcome, by }) {
+  const ok = outcome === 'approved';
+  const accent = ok ? '#22c55e' : '#ef4444';
+  const body = `
+    <div class="message">
+      Sua solicitação de mudança de prazo foi
+      <strong style="color:${accent};">${ok ? 'APROVADA' : 'REJEITADA'}</strong> por <strong>${by}</strong>.
+    </div>
+    ${cardMetaHtml({ ...card, dueDate: ok ? reqObj.newDate : reqObj.oldDate, status: card.status || card.column })}
+    <div class="card-box" style="border-left-color:${accent};">
+      <div class="meta-row">
+        <div class="meta-item"><div class="label">Prazo anterior</div><div class="value">${fmtDate(reqObj.oldDate)}</div></div>
+        <div class="meta-item"><div class="label">${ok ? 'Novo prazo' : 'Prazo solicitado (negado)'}</div><div class="value" style="color:${accent};">${fmtDate(reqObj.newDate)}</div></div>
+      </div>
+      ${(!ok && reqObj.rejectionReason) ? `<div style="margin-top:12px;"><div class="label">Motivo</div><div class="value" style="font-weight:400;color:#ccc;font-size:14px;">${reqObj.rejectionReason}</div></div>` : ''}
+    </div>`;
+  return buildEmailHtml({
+    subject:  `[Kanban FM] Prazo ${ok ? 'aprovado' : 'rejeitado'}: ${card.title}`,
+    headline: ok ? `✅ Mudança de prazo aprovada` : `❌ Mudança de prazo rejeitada`,
+    body, ctaLabel: 'Ver no Kanban →', ctaUrl: appUrl,
   });
 }
 
@@ -1084,6 +1161,151 @@ app.post('/api/admin/team/:email', requireAdmin, (req, res) => {
   saveDynamicTeam(members);
   console.log(`[${timestamp()}] ✏️  Admin update: ${email} → setor=${area} cargo=${role} chefe=${member.headOf || '—'}`);
   res.json({ ok: true });
+});
+
+// ── Fluxo de aprovação de mudança de prazo ──────────────────────────────────────
+async function safeSendMail(opts) {
+  if (!gmailUser || !gmailPassword) return;
+  try { await transporter.sendMail({ from: `"Financial Move Kanban" <${gmailUser}>`, ...opts }); }
+  catch (e) { console.error(`[${timestamp()}] ❌ email:`, e.message); }
+}
+function deptHeadEmail(dept) {
+  const h = getFullTeam().find(m => m.headOf === dept && m.email);
+  return h ? h.email : null;
+}
+
+// Criar solicitação de mudança de prazo (subordinado)
+app.post('/api/date-requests', requireAuth, async (req, res) => {
+  const u = userContext(req.session.user.email);
+  const { cardId, newDate, reason } = req.body;
+  if (!cardId || !newDate) return res.status(400).json({ ok: false, error: 'cardId e newDate obrigatórios' });
+
+  const { state } = readState();
+  const card = (state.cards || []).find(c => c.id === cardId);
+  if (!card) return res.status(404).json({ ok: false, error: 'Card não encontrado' });
+
+  // Chefe do próprio setor, COO ou admin pulam a etapa do chefe → vão direto pra aprovação final
+  const ehChefeDoCard = u.headOf && u.headOf === card.dept;
+  const initialStatus = (ehChefeDoCard || u.isFinal || u.isAdmin) ? 'pending_final' : 'pending_head';
+
+  const reqObj = {
+    id: Date.now(),
+    cardId, cardTitle: card.title, cardDept: card.dept || '',
+    requestedByEmail: u.email, requestedByName: u.name,
+    oldDate: card.dueDate || '', newDate, reason: (reason || '').trim(),
+    status: initialStatus,
+    headApprovedAt: null, headApprovedBy: null,
+    finalApprovedAt: null, finalApprovedBy: null,
+    rejectedAt: null, rejectedBy: null, rejectionReason: null,
+    createdAt: new Date().toISOString(),
+  };
+  const reqs = loadDateRequests();
+  reqs.push(reqObj);
+  saveDateRequests(reqs);
+
+  // Notifica o próximo aprovador
+  if (initialStatus === 'pending_head') {
+    const he = deptHeadEmail(card.dept);
+    const to = he || FINAL_APPROVER; // se setor sem chefe, vai direto pro COO
+    if (!he) reqObj.status = 'pending_final', saveDateRequests(reqs);
+    await safeSendMail({ to, cc: ADMIN_EMAILS.join(', '),
+      subject: `[Kanban FM] Aprovação de prazo: ${card.title}`,
+      html: buildDateReqToApprover({ reqObj, card, approverRole: he ? 'head' : 'final' }) });
+  } else {
+    await safeSendMail({ to: FINAL_APPROVER, cc: ADMIN_EMAILS.join(', '),
+      subject: `[Kanban FM] Aprovação de prazo: ${card.title}`,
+      html: buildDateReqToApprover({ reqObj, card, approverRole: 'final' }) });
+  }
+  console.log(`[${timestamp()}] 📩 Solicitação de prazo: "${card.title}" por ${u.name} → ${reqObj.status}`);
+  res.json({ ok: true, request: reqObj });
+});
+
+// Listar solicitações relevantes pro usuário
+app.get('/api/date-requests', requireAuth, (req, res) => {
+  const u = userContext(req.session.user.email);
+  const reqs = loadDateRequests().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const toApprove = [];
+  if (u.headOf) toApprove.push(...reqs.filter(r => r.status === 'pending_head' && r.cardDept === u.headOf));
+  if (u.isFinal || u.isAdmin) toApprove.push(...reqs.filter(r => r.status === 'pending_final'));
+  const mine = reqs.filter(r => r.requestedByEmail === u.email);
+  const history = (u.isAdmin || u.isFinal)
+    ? reqs.filter(r => r.status === 'approved' || r.status === 'rejected').slice(0, 20)
+    : [];
+  res.json({ ok: true, toApprove, mine, history,
+    role: { headOf: u.headOf, isFinal: u.isFinal, isAdmin: u.isAdmin } });
+});
+
+// Contador pro sininho
+app.get('/api/date-requests/count', requireAuth, (req, res) => {
+  const u = userContext(req.session.user.email);
+  const reqs = loadDateRequests();
+  let count = 0;
+  if (u.headOf) count += reqs.filter(r => r.status === 'pending_head' && r.cardDept === u.headOf).length;
+  if (u.isFinal || u.isAdmin) count += reqs.filter(r => r.status === 'pending_final').length;
+  res.json({ ok: true, count });
+});
+
+// Aprovar
+app.post('/api/date-requests/:id/approve', requireAuth, async (req, res) => {
+  const u = userContext(req.session.user.email);
+  const reqs = loadDateRequests();
+  const r = reqs.find(x => String(x.id) === String(req.params.id));
+  if (!r) return res.status(404).json({ ok: false, error: 'Solicitação não encontrada' });
+
+  const { state } = readState();
+  const card = (state.cards || []).find(c => c.id === r.cardId) || { title: r.cardTitle, dept: r.cardDept };
+
+  if (r.status === 'pending_head') {
+    if (!(u.headOf === r.cardDept || u.isAdmin)) return res.status(403).json({ ok: false, error: 'Só o chefe do setor pode aprovar esta etapa' });
+    r.status = 'pending_final'; r.headApprovedAt = new Date().toISOString(); r.headApprovedBy = u.name;
+    saveDateRequests(reqs);
+    await safeSendMail({ to: FINAL_APPROVER, cc: ADMIN_EMAILS.join(', '),
+      subject: `[Kanban FM] Aprovação de prazo: ${r.cardTitle}`,
+      html: buildDateReqToApprover({ reqObj: r, card, approverRole: 'final' }) });
+    console.log(`[${timestamp()}] ✅ Chefe aprovou prazo "${r.cardTitle}" (${u.name}) → COO`);
+    return res.json({ ok: true, status: r.status });
+  }
+
+  if (r.status === 'pending_final') {
+    if (!(u.isFinal || u.isAdmin)) return res.status(403).json({ ok: false, error: 'Só o aprovador final (COO) pode concluir' });
+    r.status = 'approved'; r.finalApprovedAt = new Date().toISOString(); r.finalApprovedBy = u.name;
+    saveDateRequests(reqs);
+    // Aplica o novo prazo no card
+    const fresh = readState();
+    const c = (fresh.state.cards || []).find(x => x.id === r.cardId);
+    if (c) { c.dueDate = r.newDate; writeState(fresh.state); }
+    await safeSendMail({ to: r.requestedByEmail, cc: ADMIN_EMAILS.join(', '),
+      subject: `[Kanban FM] Prazo aprovado: ${r.cardTitle}`,
+      html: buildDateReqOutcome({ reqObj: r, card, outcome: 'approved', by: u.name }) });
+    console.log(`[${timestamp()}] ✅ COO aprovou prazo "${r.cardTitle}" → aplicado (${r.newDate})`);
+    return res.json({ ok: true, status: r.status });
+  }
+
+  return res.status(400).json({ ok: false, error: 'Solicitação já resolvida' });
+});
+
+// Rejeitar
+app.post('/api/date-requests/:id/reject', requireAuth, async (req, res) => {
+  const u = userContext(req.session.user.email);
+  const { reason } = req.body;
+  const reqs = loadDateRequests();
+  const r = reqs.find(x => String(x.id) === String(req.params.id));
+  if (!r) return res.status(404).json({ ok: false, error: 'Solicitação não encontrada' });
+  if (r.status !== 'pending_head' && r.status !== 'pending_final') return res.status(400).json({ ok: false, error: 'Solicitação já resolvida' });
+
+  const podeRejeitar = (r.status === 'pending_head' && (u.headOf === r.cardDept || u.isAdmin))
+                    || (r.status === 'pending_final' && (u.isFinal || u.isAdmin));
+  if (!podeRejeitar) return res.status(403).json({ ok: false, error: 'Sem permissão para rejeitar' });
+
+  r.status = 'rejected'; r.rejectedAt = new Date().toISOString(); r.rejectedBy = u.name; r.rejectionReason = (reason || '').trim();
+  saveDateRequests(reqs);
+  const { state } = readState();
+  const card = (state.cards || []).find(c => c.id === r.cardId) || { title: r.cardTitle, dept: r.cardDept };
+  await safeSendMail({ to: r.requestedByEmail, cc: ADMIN_EMAILS.join(', '),
+    subject: `[Kanban FM] Prazo rejeitado: ${r.cardTitle}`,
+    html: buildDateReqOutcome({ reqObj: r, card, outcome: 'rejected', by: u.name }) });
+  console.log(`[${timestamp()}] ❌ Prazo rejeitado "${r.cardTitle}" por ${u.name}`);
+  res.json({ ok: true, status: r.status });
 });
 
 // ── Robô de alertas de prazo (agendado) ────────────────────────────────────────
