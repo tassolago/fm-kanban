@@ -354,6 +354,11 @@ select option{background:var(--surface2)}
   <div id="user-info" style="display:flex;align-items:center;gap:8px;margin-left:8px;"></div>
   <div id="admin-link"></div>
 
+  <button id="activity-btn" onclick="openActivityPanel()" title="Atividades recentes" style="position:relative;background:transparent;border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text2);padding:7px 10px;transition:all .2s;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    <span id="activity-dot" style="display:none;position:absolute;top:-3px;right:-3px;width:9px;height:9px;background:var(--orange);border-radius:50%;border:2px solid var(--surface);"></span>
+  </button>
+
   <button id="notif-btn" onclick="openNotifPanel()" title="Aprovações de prazo" style="display:none;position:relative;background:transparent;border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text2);padding:7px 10px;transition:all .2s;">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
     <span id="notif-badge" style="display:none;position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;line-height:16px;text-align:center;border-radius:8px;padding:0 4px;">0</span>
@@ -470,11 +475,6 @@ select option{background:var(--surface2)}
           <textarea id="modal-desc" placeholder="Descreva o que precisa ser feito…"></textarea>
         </div>
       </div>
-      <div class="notify-row">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--orange);flex-shrink:0"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
-        <label for="modal-notify">Notificar time por email</label>
-        <label class="toggle"><input type="checkbox" id="modal-notify" checked/><span class="toggle-slider"></span></label>
-      </div>
       <div class="section-header">Comentários</div>
       <div class="comments-list" id="comments-list"></div>
       <div class="add-comment-row">
@@ -522,7 +522,7 @@ const COLUMN_COLORS = ['#666','#FF9800','#3b82f6','#22c55e','#a855f7','#ef4444',
 const API_BASE = '/api';
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let state = { cards:[], nextId:1, deptColumns:{} };
+let state = { cards:[], nextId:1, deptColumns:{}, activity:[] };
 let currentDept   = DEPARTMENTS[0];
 let currentUser   = null;
 let filterAssignee = '';
@@ -581,7 +581,7 @@ async function loadStateFromServer() {
     serverOnline = true;
     setSyncStatus('synced');
   } catch {
-    state = { cards:[], nextId:1, deptColumns:{} };
+    state = { cards:[], nextId:1, deptColumns:{}, activity:[] };
     serverOnline = false;
     setSyncStatus('offline');
   }
@@ -699,21 +699,21 @@ async function checkServer() {
   }
 }
 
-async function sendNotification(type, card, assignee, changer, comment='') {
-  if (!serverOnline) { toast('Servidor offline — email não enviado', 'warn'); return; }
-  try {
-    const res = await fetch(`${API_BASE}/notify`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ type, card, assignee, changer, department: card.dept, comment }),
-      signal: AbortSignal.timeout(8000),
-    });
-    const data = await res.json();
-    if (data.ok) toast(`Email enviado para ${assignee}`, 'success');
-    else toast(data.error || 'Falha ao enviar email', 'warn');
-  } catch {
-    toast('Servidor offline — email não enviado', 'error');
-  }
+// Registra uma movimentação no feed de atividades (em vez de email).
+// O feed fica em state.activity e sincroniza entre todos via polling.
+function logActivity(text) {
+  if (!state.activity) state.activity = [];
+  state.activity.unshift({
+    id: Date.now() + Math.random(),
+    ts: new Date().toISOString(),
+    user: currentUser?.name || 'Alguém',
+    text,
+  });
+  if (state.activity.length > 120) state.activity = state.activity.slice(0, 120);
+  saveState();
+  // Atualiza o painel se estiver aberto
+  if (document.getElementById('activity-panel')?.dataset.open === '1') renderActivity();
+  bumpActivityDot();
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
@@ -993,11 +993,12 @@ async function onDrop(e, colId) {
   if (!dragCardId || dragOriginCol === colId) return;
   const card = state.cards.find(c => c.id===dragCardId);
   if (!card) return;
+  const cols = getColumnsForDept(card.dept || currentDept);
+  const fromLabel = cols.find(c => c.id===card.column)?.label || card.column;
+  const toLabel   = cols.find(c => c.id===colId)?.label || colId;
   card.column = colId;
   saveState(); render();
-  const cols = getColumnsForDept(card.dept || currentDept);
-  const colLabel = cols.find(c => c.id===colId)?.label || colId;
-  if (card.assignee) await sendNotification('status_changed', {...card, status:colLabel}, card.assignee, currentUser?.name||'Sistema');
+  logActivity(`moveu <b>${escHtml(card.title)}</b> de ${escHtml(fromLabel)} → ${escHtml(toLabel)}`);
 }
 
 // ── Modal ──────────────────────────────────────────────────────────────────────
@@ -1033,7 +1034,6 @@ function openModal(cardId, dept, defaultCol) {
     document.getElementById('comments-list').innerHTML = '';
     document.getElementById('comment-input').value = '';
     document.getElementById('btn-delete').style.display = 'none';
-    document.getElementById('modal-notify').checked = true;
     document.getElementById('modal-dept-badge').textContent = realDept;
     refreshStatusSelector(defaultCol || getColumnsForDept(realDept)[0]?.id);
   } else {
@@ -1049,7 +1049,6 @@ function openModal(cardId, dept, defaultCol) {
     document.getElementById('modal-desc').value = card.description || '';
     document.getElementById('modal-dept-badge').textContent = card.dept;
     document.getElementById('btn-delete').style.display = '';
-    document.getElementById('modal-notify').checked = true;
     document.getElementById('comment-input').value = '';
     refreshStatusSelector(card.column);
     renderComments(card.comments||[]);
@@ -1112,21 +1111,20 @@ async function saveModal() {
   const dueDate  = document.getElementById('modal-due').value;
   const desc     = document.getElementById('modal-desc').value.trim();
   const dept     = document.getElementById('modal-dept-select').value;
-  const notify   = document.getElementById('modal-notify').checked;
   const cols     = getColumnsForDept(dept);
   const finalCol = column || cols[0]?.id || 'backlog';
 
+  const colLabel = cols.find(c=>c.id===finalCol)?.label || finalCol;
   if (editingCard) {
     const prevAssignee = editingCard.assignee;
     const prevCol      = editingCard.column;
+    const prevColLabel = cols.find(c=>c.id===prevCol)?.label || prevCol;
     editingCard.title = title; editingCard.column = finalCol; editingCard.assignee = assignee;
     editingCard.priority = priority; editingCard.dueDate = dueDate; editingCard.description = desc; editingCard.dept = dept;
     saveState();
-    if (notify && assignee) {
-      const colLabel = cols.find(c=>c.id===finalCol)?.label || finalCol;
-      if (prevAssignee !== assignee) await sendNotification('assigned', {...editingCard, status:colLabel}, assignee, currentUser?.name||'Você');
-      else if (prevCol !== finalCol) await sendNotification('status_changed', {...editingCard, status:colLabel}, assignee, currentUser?.name||'Você');
-    }
+    // Feed de atividades (sem email)
+    if (prevAssignee !== assignee && assignee) logActivity(`atribuiu <b>${escHtml(title)}</b> para ${escHtml(assignee)}`);
+    if (prevCol !== finalCol) logActivity(`moveu <b>${escHtml(title)}</b> de ${escHtml(prevColLabel)} → ${escHtml(colLabel)}`);
   } else {
     const newCard = {
       id: state.nextId++, dept, title, column: finalCol, assignee, priority, dueDate,
@@ -1134,10 +1132,7 @@ async function saveModal() {
     };
     state.cards.push(newCard);
     saveState();
-    if (notify && assignee) {
-      const colLabel = cols.find(c=>c.id===finalCol)?.label || finalCol;
-      await sendNotification('assigned', {...newCard, status:colLabel}, assignee, currentUser?.name||'Você');
-    }
+    logActivity(`criou <b>${escHtml(title)}</b> em ${escHtml(dept)}${assignee ? ' · resp. ' + escHtml(assignee) : ''}`);
   }
   render(); closeModal();
 }
@@ -1155,15 +1150,14 @@ async function addComment() {
     saveState();
     renderComments(editingCard.comments);
     input.value = '';
-    if (document.getElementById('modal-notify').checked && editingCard.assignee) {
-      await sendNotification('comment', editingCard, editingCard.assignee, author, text);
-    }
+    logActivity(`comentou em <b>${escHtml(editingCard.title)}</b>`);
   }
 }
 
 function deleteCard() {
   if (!editingCard) return;
   if (!confirm(`Excluir o card "${editingCard.title}"?`)) return;
+  logActivity(`excluiu <b>${escHtml(editingCard.title)}</b>`);
   state.cards = state.cards.filter(c => c.id!==editingCard.id);
   saveState(); render(); closeModal();
 }
@@ -1318,12 +1312,7 @@ function createMeetCards() {
     };
     state.cards.push(newCard);
     created++;
-    if (assignee) {
-      fetch('/api/notify', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ type:'assigned', card:newCard, assignee, changer:'IA · Reunião: '+data.meetingTitle }),
-      }).catch(()=>{});
-    }
+    logActivity(`criou <b>${escHtml(title)}</b> em ${escHtml(dept)} via IA (reunião)${assignee ? ' · resp. ' + escHtml(assignee) : ''}`);
   });
   saveStateToServer();
   render();
@@ -1368,6 +1357,19 @@ if (new URLSearchParams(location.search).get('google') === 'connected') {
 })();
 </script>
 
+<!-- ── Painel de Atividades (drawer) ─────────────────────────────────────── -->
+<div id="activity-backdrop" onclick="closeActivityPanel()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:298;"></div>
+<div id="activity-panel" data-open="0" style="position:fixed;top:0;right:-420px;width:420px;max-width:92vw;height:100vh;background:var(--surface);border-left:1px solid var(--border);z-index:299;transition:right .28s ease;display:flex;flex-direction:column;box-shadow:-8px 0 32px rgba(0,0,0,.5);">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 22px;border-bottom:1px solid var(--border);flex-shrink:0;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FF9800" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;color:#fff;">Atividades recentes</span>
+    </div>
+    <button onclick="closeActivityPanel()" style="background:none;border:none;color:#666;font-size:22px;cursor:pointer;line-height:1;">×</button>
+  </div>
+  <div id="activity-body" style="flex:1;overflow-y:auto;padding:14px 18px;"></div>
+</div>
+
 <!-- ── Painel de Aprovações (drawer) ──────────────────────────────────────── -->
 <div id="notif-backdrop" onclick="closeNotifPanel()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:298;"></div>
 <div id="notif-panel" style="position:fixed;top:0;right:-420px;width:420px;max-width:92vw;height:100vh;background:var(--surface);border-left:1px solid var(--border);z-index:299;transition:right .28s ease;display:flex;flex-direction:column;box-shadow:-8px 0 32px rgba(0,0,0,.5);">
@@ -1408,6 +1410,53 @@ if (new URLSearchParams(location.search).get('google') === 'connected') {
 </div>
 
 <script>
+// ── Feed de Atividades ──────────────────────────────────────────────────────────
+function timeAgo(ts) {
+  const diff = (Date.now() - new Date(ts)) / 1000;
+  if (diff < 60) return 'agora';
+  if (diff < 3600) return Math.floor(diff/60) + ' min';
+  if (diff < 86400) return Math.floor(diff/3600) + 'h';
+  if (diff < 172800) return 'ontem';
+  return new Date(ts).toLocaleDateString('pt-BR', { day:'2-digit', month:'short' });
+}
+function bumpActivityDot() {
+  const last = state.activity?.[0]?.id;
+  const seen = localStorage.getItem('activity-seen');
+  const dot = document.getElementById('activity-dot');
+  if (dot && last && String(last) !== seen) dot.style.display = 'block';
+}
+function openActivityPanel() {
+  const p = document.getElementById('activity-panel');
+  p.dataset.open = '1';
+  document.getElementById('activity-backdrop').style.display = 'block';
+  p.style.right = '0';
+  renderActivity();
+  if (state.activity?.[0]) localStorage.setItem('activity-seen', String(state.activity[0].id));
+  const dot = document.getElementById('activity-dot'); if (dot) dot.style.display = 'none';
+}
+function closeActivityPanel() {
+  const p = document.getElementById('activity-panel');
+  p.dataset.open = '0';
+  p.style.right = '-420px';
+  document.getElementById('activity-backdrop').style.display = 'none';
+}
+function renderActivity() {
+  const body = document.getElementById('activity-body');
+  const acts = state.activity || [];
+  if (!acts.length) { body.innerHTML = '<div style="color:#666;text-align:center;padding:40px 20px;font-size:13px;">Nenhuma atividade ainda.</div>'; return; }
+  body.innerHTML = acts.map(a => {
+    const initials = (a.user||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    return `
+    <div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
+      <div style="width:26px;height:26px;border-radius:50%;background:var(--orange);color:#000;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${initials}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;color:var(--text2);line-height:1.5;"><b style="color:#fff;">${escHtml(a.user)}</b> ${a.text}</div>
+        <div style="font-size:11px;color:var(--text4);margin-top:2px;">${timeAgo(a.ts)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 // ── Fluxo de aprovação de prazo (frontend) ──────────────────────────────────────
 let dateReqCardId = null;
 
@@ -1580,8 +1629,12 @@ async function rejectReq(id) {
   } catch(e) { toast(e.message||'Erro ao rejeitar', 'error'); }
 }
 
-// Inicializa sininho após carregar o usuário
-setTimeout(() => { refreshNotifCount(); setInterval(refreshNotifCount, 45000); }, 1500);
+// Inicializa sininho + pontinho de atividade após carregar
+setTimeout(() => {
+  refreshNotifCount();
+  bumpActivityDot();
+  setInterval(() => { refreshNotifCount(); bumpActivityDot(); }, 30000);
+}, 1500);
 </script>
 </body>
 </html>
