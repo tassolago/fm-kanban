@@ -4,6 +4,7 @@
 const express    = require('express');
 const cors       = require('cors');
 const session    = require('express-session');
+const FileStore  = require('session-file-store')(session);
 const nodemailer = require('nodemailer');
 const path       = require('path');
 const fs         = require('fs');
@@ -151,10 +152,19 @@ const ADMIN_EMAILS   = (process.env.ADMIN_EMAILS || 'tassolago@financialmove.com
 app.use(cors());
 app.use(express.json());
 app.use(session({
+  // Sessões gravadas no volume persistente — sobrevivem a redeploys (login dura 7 dias de verdade)
+  store: new FileStore({
+    path:    path.join(dataDir, 'sessions'),
+    ttl:     7 * 24 * 60 * 60,   // 7 dias (segundos)
+    retries: 1,
+    reapInterval: 24 * 60 * 60,  // limpa sessões expiradas 1x/dia
+    logFn:   () => {},           // silencia logs internos
+  }),
   secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false, maxAge: 7 * 24 * 60 * 60 * 1000 }, // 7 days
+  rolling: true,                 // renova o prazo a cada acesso
+  cookie: { secure: false, httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 },
 }));
 
 // ── Auth middleware ───────────────────────────────────────────────────────────
