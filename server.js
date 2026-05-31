@@ -582,6 +582,25 @@ app.get('/api/state', (req, res) => {
 app.post('/api/state', (req, res) => {
   const { state } = req.body;
   if (!state) return res.status(400).json({ ok: false, error: 'Missing state' });
+
+  // Proteção de prazo: só COO e admin alteram um prazo já definido.
+  // Para os demais, qualquer mudança em dueDate existente é revertida (anti-burla da trava da UI).
+  // Definir o 1º prazo de um card sem data continua permitido.
+  const u = userContext(req.session?.user?.email || '');
+  if (!(u.isFinal || u.isAdmin)) {
+    const prev = readState().state;
+    const prevById = new Map((prev.cards || []).map(c => [c.id, c]));
+    let reverted = 0;
+    (state.cards || []).forEach(c => {
+      const old = prevById.get(c.id);
+      if (old && old.dueDate && c.dueDate !== old.dueDate) {
+        c.dueDate = old.dueDate; // reverte alteração não autorizada
+        reverted++;
+      }
+    });
+    if (reverted) console.log(`[${timestamp()}] 🔒 ${reverted} alteração(ões) de prazo bloqueada(s) p/ ${u.email}`);
+  }
+
   const updated_at = writeState(state);
   res.json({ ok: true, updated_at });
 });

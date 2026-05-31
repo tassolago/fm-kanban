@@ -1388,7 +1388,7 @@ if (new URLSearchParams(location.search).get('google') === 'connected') {
       <span style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:16px;color:#fff;">Solicitar mudança de prazo</span>
       <button onclick="closeDateReqForm()" style="background:none;border:none;color:#666;font-size:22px;cursor:pointer;line-height:1;">×</button>
     </div>
-    <div style="font-size:13px;color:var(--text3);line-height:1.6;margin-bottom:18px;">Este card está atrasado. A mudança de prazo precisa de aprovação do chefe do setor e depois do COO.</div>
+    <div style="font-size:13px;color:var(--text3);line-height:1.6;margin-bottom:18px;">A alteração de prazo precisa de aprovação do chefe do setor e depois do COO.</div>
     <div style="display:flex;flex-direction:column;gap:14px;">
       <div>
         <label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;display:block;margin-bottom:6px;">Novo prazo *</label>
@@ -1411,19 +1411,14 @@ if (new URLSearchParams(location.search).get('google') === 'connected') {
 // ── Fluxo de aprovação de prazo (frontend) ──────────────────────────────────────
 let dateReqCardId = null;
 
-function isCardOverdue(card) {
-  if (!card || !card.dueDate) return false;
-  const cols = getColumnsForDept(card.dept || currentDept);
-  const lastColId = cols[cols.length - 1]?.id;
-  const today = new Date(); today.setHours(0,0,0,0);
-  return new Date(card.dueDate + 'T00:00') < today && card.column !== lastColId;
-}
-// Pode mudar prazo de card atrasado livremente? Só COO (final) e admin.
-function canEditOverdueDate() {
+// Pode alterar prazo já definido livremente? Só COO (final) e admin.
+function canEditDateFreely() {
   return !!(currentUser && (currentUser.isFinal || currentUser.isAdmin));
 }
 
-// Trava o campo de data no modal se o card estiver atrasado e o usuário não for COO/admin
+// Trava o campo de data no modal quando o card JÁ TEM prazo e o usuário não é COO/admin.
+// Assim o subordinado não consegue empurrar o prazo (nem antes, nem depois de vencer).
+// Definir o PRIMEIRO prazo de um card sem data continua liberado.
 function applyDateLock() {
   const dueInput = document.getElementById('modal-due');
   const holder = document.getElementById('datelock-holder');
@@ -1432,16 +1427,17 @@ function applyDateLock() {
   dueInput.disabled = false;
   dueInput.style.opacity = '1';
 
-  if (editingCard && isCardOverdue(editingCard) && !canEditOverdueDate()) {
+  const temPrazo = editingCard && editingCard.dueDate;
+  if (temPrazo && !canEditDateFreely()) {
     dueInput.disabled = true;
     dueInput.style.opacity = '.55';
     const div = document.createElement('div');
     div.id = 'datelock-holder';
     div.style.cssText = 'margin-top:8px;';
     div.innerHTML = `
-      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--red);margin-bottom:6px;">
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3);margin-bottom:6px;">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-        Card atrasado — prazo travado
+        Prazo definido — alteração requer aprovação
       </div>
       <button type="button" onclick="openDateReqForm()" style="width:100%;padding:9px;background:var(--orange-glow);border:1px solid var(--orange);border-radius:6px;color:var(--orange);font-size:12px;font-weight:600;cursor:pointer;">Solicitar mudança de prazo</button>`;
     dueInput.parentElement.appendChild(div);
