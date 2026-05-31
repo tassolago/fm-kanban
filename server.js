@@ -328,16 +328,7 @@ function buildEmailHtml({ subject, headline, body, ctaLabel, ctaUrl }) {
 <body>
 <div class="wrapper">
   <div class="header">
-    <div class="logo-mark" style="background:transparent;padding:0;">
-      <svg width="42" height="42" viewBox="0 0 42 42" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect width="42" height="42" rx="8" fill="#000"/>
-        <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FFDD00"/><stop offset="100%" stop-color="#FF8C00"/></linearGradient></defs>
-        <rect x="6"  y="29" width="6" height="9"  rx="1.5" fill="url(#bg)"/>
-        <rect x="14" y="22" width="6" height="16" rx="1.5" fill="url(#bg)"/>
-        <rect x="22" y="13" width="6" height="25" rx="1.5" fill="url(#bg)"/>
-        <rect x="30" y="18" width="6" height="20" rx="1.5" fill="url(#bg)"/>
-      </svg>
-    </div>
+    <img src="https://res.cloudinary.com/dsir40des/image/upload/v1780237002/fm_logo_b6rej0.png" width="42" height="42" alt="Financial Move" style="display:block;width:42px;height:42px;object-fit:contain;flex-shrink:0;"/>
     <div>
       <div class="brand-name">Financial Move</div>
       <div class="brand-sub">Kanban · Gestão de Projetos</div>
