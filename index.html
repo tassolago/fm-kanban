@@ -38,12 +38,10 @@ select option{background:var(--surface2)}
   flex-shrink:0;z-index:50;
 }
 .logo{display:flex;align-items:center;gap:10px;text-decoration:none}
-.logo-mark{width:36px;height:36px;background:var(--orange);border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;color:#000;letter-spacing:-0.5px;flex-shrink:0}
 .logo-text{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;color:#fff;line-height:1.2}
 .logo-sub{font-size:10px;color:var(--text3);font-weight:400;font-family:'Inter',sans-serif;letter-spacing:.5px}
 #topbar .sep{width:1px;height:28px;background:var(--border);flex-shrink:0}
 #topbar h1{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:600;color:var(--text)}
-
 .server-status{display:flex;align-items:center;gap:7px;margin-left:auto;font-size:12px;color:var(--text3);flex-shrink:0}
 .btn-meet{display:flex;align-items:center;gap:6px;padding:7px 14px;background:transparent;border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text2);font-size:13px;font-weight:500;transition:all .2s}
 .btn-meet:hover{border-color:var(--orange);color:var(--orange);background:var(--orange-glow)}
@@ -51,7 +49,6 @@ select option{background:var(--surface2)}
 .server-dot.online{background:var(--green)}
 .server-dot.offline{background:var(--red)}
 #serverLabel{transition:color .4s}
-
 .btn-add-card{
   display:flex;align-items:center;gap:6px;
   background:var(--orange);color:#000;font-weight:600;font-size:13px;
@@ -63,7 +60,7 @@ select option{background:var(--surface2)}
 
 /* ── Dept Tabs ─────────────────────────────────────────────────────────────── */
 #tabs-wrap{
-  display:flex;align-items:center;gap:4px;padding:0 24px;
+  display:flex;align-items:center;gap:4px;padding:0 16px;
   background:var(--surface);border-bottom:1px solid var(--border);
   flex-shrink:0;overflow-x:auto;height:48px;min-height:48px;
 }
@@ -75,6 +72,9 @@ select option{background:var(--surface2)}
 }
 .tab:hover{color:var(--text2);background:var(--surface2)}
 .tab.active{color:var(--orange);background:var(--orange-glow);font-weight:600}
+.filter-wrap{margin-left:auto;display:flex;align-items:center;gap:7px;flex-shrink:0;padding-left:12px;border-left:1px solid var(--border);}
+.filter-select{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text2);font-size:12px;padding:4px 26px 4px 8px;cursor:pointer;outline:none;max-width:150px;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='none' viewBox='0 0 24 24'%3E%3Cpath stroke='%23666' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 7px center;}
+.filter-select:focus{border-color:var(--orange)}
 
 /* ── Board ─────────────────────────────────────────────────────────────────── */
 #board-wrap{flex:1;overflow:hidden;display:flex;flex-direction:column}
@@ -94,19 +94,18 @@ select option{background:var(--surface2)}
   padding:14px 16px 10px;border-bottom:1px solid var(--border);flex-shrink:0;
 }
 .col-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.col-title{font-weight:600;font-size:13px;color:var(--text);flex:1}
+.col-title{font-weight:600;font-size:13px;color:var(--text);flex:1;cursor:default;}
+.col-title:hover::after{content:' ✎';font-size:10px;color:var(--text4);opacity:.6;}
 .col-count{
   background:var(--surface2);color:var(--text3);
   font-size:11px;font-weight:600;padding:2px 7px;border-radius:10px;
 }
-
 .col-body{
   flex:1;overflow-y:auto;padding:10px 10px;
   display:flex;flex-direction:column;gap:10px;
   min-height:80px;
 }
 .col-body.drag-over{background:var(--orange-glow);border-radius:var(--radius-sm)}
-
 .col-add{
   display:flex;align-items:center;gap:6px;width:100%;
   background:transparent;border:none;color:var(--text3);
@@ -115,6 +114,16 @@ select option{background:var(--surface2)}
 }
 .col-add:hover{background:var(--surface2);color:var(--text2)}
 .col-add svg{opacity:.5}
+
+/* ── Add column tile ──────────────────────────────────────────────────────── */
+.add-col-tile{
+  width:200px;min-width:200px;
+  background:transparent;border:1px dashed var(--border2);border-radius:var(--radius-lg);
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;cursor:pointer;transition:border-color .2s,background .2s;
+  max-height:100%;
+}
+.add-col-tile:hover{border-color:var(--orange);background:var(--orange-glow)}
 
 /* ── Card ──────────────────────────────────────────────────────────────────── */
 .card{
@@ -125,6 +134,8 @@ select option{background:var(--surface2)}
 .card:hover{border-color:var(--border2);box-shadow:0 4px 16px rgba(0,0,0,.4)}
 .card:active{cursor:grabbing;transform:scale(.98)}
 .card.dragging{opacity:.4;transform:scale(.96)}
+.card.overdue{border-left:3px solid var(--red);}
+.overdue-label{font-size:10px;font-weight:600;color:var(--red);display:block;margin-bottom:5px;letter-spacing:.3px;}
 
 .card-priority{
   display:inline-block;font-size:10px;font-weight:600;
@@ -136,7 +147,6 @@ select option{background:var(--surface2)}
 
 .card-title{font-weight:600;font-size:14px;color:var(--text);margin-bottom:6px;line-height:1.4}
 .card-desc{font-size:12px;color:var(--text3);margin-bottom:10px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-
 .card-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px}
 .card-tag{
   display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);
@@ -148,10 +158,32 @@ select option{background:var(--surface2)}
   display:flex;align-items:center;justify-content:center;
   font-size:9px;font-weight:700;color:#000;flex-shrink:0;margin-left:auto;
 }
+.card-comments-badge{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);}
 
-.card-comments-badge{
-  display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);
+/* ── Geral view ────────────────────────────────────────────────────────────── */
+.geral-stats{display:flex;gap:10px;margin-bottom:28px;flex-wrap:wrap;}
+.geral-stat{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:10px 16px;min-width:80px;text-align:center;
 }
+.geral-stat span{font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;color:#fff;display:block;}
+.geral-stat div{font-size:11px;color:var(--text3);margin-top:2px;}
+.geral-section{margin-bottom:28px;}
+.geral-section-header{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+.geral-section-header .dept-name{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:600;color:#fff;}
+.geral-count{background:var(--surface2);color:var(--text3);font-size:11px;font-weight:600;padding:2px 7px;border-radius:10px;}
+.geral-divider{flex:1;height:1px;background:var(--border);}
+.geral-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;}
+.geral-card{
+  background:var(--surface2);border:1px solid var(--border);border-left:3px solid #666;
+  border-radius:var(--radius);padding:10px 12px;cursor:pointer;
+  transition:box-shadow .2s,border-color .2s;
+}
+.geral-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.4);}
+.geral-card.overdue{border-left-color:var(--red)!important;}
+.geral-card-title{font-weight:600;font-size:13px;color:var(--text);margin-bottom:8px;line-height:1.4;}
+.geral-card-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.geral-status-badge{font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;white-space:nowrap;}
 
 /* ── Modal Overlay ─────────────────────────────────────────────────────────── */
 #modal-overlay{
@@ -160,14 +192,12 @@ select option{background:var(--surface2)}
   opacity:0;pointer-events:none;transition:opacity .2s;padding:20px;
 }
 #modal-overlay.open{opacity:1;pointer-events:all}
-
 .modal{
   background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);
   width:600px;max-width:100%;max-height:90vh;display:flex;flex-direction:column;
   box-shadow:var(--shadow);transform:translateY(8px);transition:transform .25s;
 }
 #modal-overlay.open .modal{transform:translateY(0)}
-
 .modal-header{
   display:flex;align-items:flex-start;gap:12px;
   padding:22px 24px 16px;border-bottom:1px solid var(--border);flex-shrink:0;
@@ -185,26 +215,19 @@ select option{background:var(--surface2)}
   border-bottom:2px solid transparent;transition:border-color .2s;
 }
 #modal-title-input:focus{outline:none;border-bottom-color:var(--orange)}
-
 .modal-close{
   background:transparent;border:none;color:var(--text3);padding:4px;
-  border-radius:var(--radius-sm);transition:color .2s,background .2s;flex-shrink:0;
-  margin-top:-2px;
+  border-radius:var(--radius-sm);transition:color .2s,background .2s;flex-shrink:0;margin-top:-2px;
 }
 .modal-close:hover{color:var(--text);background:var(--surface2)}
-
 .modal-body{flex:1;overflow-y:auto;padding:20px 24px}
-
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
 .field-row.single{grid-template-columns:1fr}
 .field{display:flex;flex-direction:column;gap:6px}
 .field label{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.5px;text-transform:uppercase}
 .field input,.field select,.field textarea{width:100%}
 .field textarea{resize:vertical;min-height:72px;line-height:1.6}
-
 .field select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' viewBox='0 0 24 24'%3E%3Cpath stroke='%23666' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
-
-/* Status selector */
 .status-selector{display:flex;gap:8px;flex-wrap:wrap}
 .status-opt{
   padding:6px 12px;border-radius:var(--radius-sm);border:1px solid var(--border2);
@@ -213,8 +236,6 @@ select option{background:var(--surface2)}
 }
 .status-opt:hover{border-color:var(--text3)}
 .status-opt.selected{border-color:var(--orange);background:var(--orange-glow);color:var(--orange);font-weight:600}
-
-/* Notify toggle */
 .notify-row{
   display:flex;align-items:center;gap:10px;
   padding:12px 14px;background:var(--surface2);border:1px solid var(--border);
@@ -234,8 +255,6 @@ select option{background:var(--surface2)}
 }
 .toggle input:checked + .toggle-slider{background:var(--orange)}
 .toggle input:checked + .toggle-slider::before{transform:translateX(16px);background:#000}
-
-/* Section headers */
 .section-header{
   display:flex;align-items:center;gap:8px;
   font-size:11px;font-weight:600;color:var(--text3);
@@ -243,8 +262,6 @@ select option{background:var(--surface2)}
   margin-bottom:12px;margin-top:20px;
 }
 .section-header::after{content:'';flex:1;height:1px;background:var(--border)}
-
-/* Comments */
 .comments-list{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
 .comment-item{
   background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);
@@ -258,7 +275,6 @@ select option{background:var(--surface2)}
 .comment-author{font-size:12px;font-weight:600;color:var(--text2)}
 .comment-time{font-size:11px;color:var(--text4)}
 .comment-text{font-size:13px;color:var(--text2);line-height:1.6}
-
 .add-comment-row{display:flex;gap:8px;align-items:flex-start}
 .add-comment-row textarea{flex:1;min-height:52px;resize:none}
 .btn-comment{
@@ -267,28 +283,23 @@ select option{background:var(--surface2)}
   transition:all .2s;white-space:nowrap;flex-shrink:0;
 }
 .btn-comment:hover{border-color:var(--orange);color:var(--orange)}
-
-/* Modal footer */
 .modal-footer{
   display:flex;align-items:center;justify-content:space-between;
   padding:16px 24px;border-top:1px solid var(--border);flex-shrink:0;gap:10px;
 }
 .btn-delete{
   background:transparent;border:1px solid rgba(239,68,68,.3);color:#f87171;
-  font-size:12px;font-weight:600;padding:8px 14px;border-radius:var(--radius-sm);
-  transition:all .2s;
+  font-size:12px;font-weight:600;padding:8px 14px;border-radius:var(--radius-sm);transition:all .2s;
 }
 .btn-delete:hover{background:rgba(239,68,68,.1);border-color:#ef4444}
 .btn-cancel{
   background:transparent;border:1px solid var(--border2);color:var(--text2);
-  font-size:13px;font-weight:500;padding:9px 18px;border-radius:var(--radius-sm);
-  transition:all .2s;
+  font-size:13px;font-weight:500;padding:9px 18px;border-radius:var(--radius-sm);transition:all .2s;
 }
 .btn-cancel:hover{border-color:var(--text3)}
 .btn-save{
   background:var(--orange);color:#000;font-weight:700;font-size:13px;
-  border:none;padding:9px 22px;border-radius:var(--radius-sm);
-  transition:background .2s,transform .1s;
+  border:none;padding:9px 22px;border-radius:var(--radius-sm);transition:background .2s,transform .1s;
 }
 .btn-save:hover{background:#ffad33}
 .btn-save:active{transform:scale(.97)}
@@ -299,28 +310,17 @@ select option{background:var(--surface2)}
   display:flex;flex-direction:column;gap:8px;align-items:flex-end;
 }
 .toast{
-  display:flex;align-items:center;gap:10px;
-  padding:12px 16px;border-radius:var(--radius);
-  font-size:13px;font-weight:500;
-  box-shadow:var(--shadow);border:1px solid transparent;
-  animation:toastIn .3s ease,toastOut .4s ease 2.6s forwards;
-  max-width:320px;
+  display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:var(--radius);
+  font-size:13px;font-weight:500;box-shadow:var(--shadow);border:1px solid transparent;
+  animation:toastIn .3s ease,toastOut .4s ease 2.6s forwards;max-width:320px;
 }
 .toast.success{background:#1a2e1a;border-color:rgba(34,197,94,.3);color:#4ade80}
 .toast.error  {background:#2e1a1a;border-color:rgba(239,68,68,.3);color:#f87171}
 .toast.warn   {background:#2a2200;border-color:rgba(255,152,0,.3);color:var(--orange)}
 .toast.info   {background:var(--surface2);border-color:var(--border2);color:var(--text2)}
-
 @keyframes toastIn{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:translateX(0)}}
 @keyframes toastOut{from{opacity:1}to{opacity:0;transform:translateX(16px)}}
-
-/* ── Empty state ───────────────────────────────────────────────────────────── */
-.col-empty{
-  text-align:center;padding:20px 10px;color:var(--text4);
-  font-size:12px;font-style:italic;
-}
-
-/* ── Scrollbar in board ─────────────────────────────────────────────────────── */
+.col-empty{text-align:center;padding:20px 10px;color:var(--text4);font-size:12px;font-style:italic;}
 #board::-webkit-scrollbar{height:6px}
 </style>
 </head>
@@ -329,16 +329,10 @@ select option{background:var(--surface2)}
 <!-- ── Top Bar ──────────────────────────────────────────────────────────────── -->
 <div id="topbar">
   <div class="logo">
-    <div class="logo-mark" style="background:transparent;padding:0;">
+    <div style="background:transparent;padding:0;display:flex;">
       <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect width="36" height="36" rx="7" fill="#000"/>
-        <defs>
-          <linearGradient id="bar-grad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#FFDD00"/>
-            <stop offset="100%" stop-color="#FF8C00"/>
-          </linearGradient>
-        </defs>
-        <!-- 4 bars: ascending heights left to right, last one shorter -->
+        <defs><linearGradient id="bar-grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FFDD00"/><stop offset="100%" stop-color="#FF8C00"/></linearGradient></defs>
         <rect x="5"  y="24" width="5" height="8"  rx="1.5" fill="url(#bar-grad)"/>
         <rect x="12" y="18" width="5" height="14" rx="1.5" fill="url(#bar-grad)"/>
         <rect x="19" y="11" width="5" height="21" rx="1.5" fill="url(#bar-grad)"/>
@@ -364,7 +358,7 @@ select option{background:var(--surface2)}
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 10l4.553-2.069A1 1 0 0121 8.862v6.276a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/></svg>
     Reuniões
   </button>
-  <button class="btn-add-card" onclick="openModal(null, currentDept)">
+  <button class="btn-add-card" id="btn-novo-card" onclick="openModal(null, currentDept==='Geral'?DEPARTMENTS[0]:currentDept)">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     Novo Card
   </button>
@@ -374,10 +368,8 @@ select option{background:var(--surface2)}
 <div id="tabs-wrap"></div>
 
 <!-- ── Meet Modal ────────────────────────────────────────────────────────── -->
-<div id="meet-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;display:none;align-items:center;justify-content:center;">
-  <div style="background:#161616;border:1px solid #2a2a2a;border-radius:14px;width:680px;max-width:95vw;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.8);">
-
-    <!-- Header -->
+<div id="meet-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:#161616;border:1px solid #2a2a2a;border-radius:14px;width:700px;max-width:95vw;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.8);">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px;border-bottom:1px solid #2a2a2a;">
       <div style="display:flex;align-items:center;gap:10px;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FF9800" stroke-width="2"><path d="M15 10l4.553-2.069A1 1 0 0121 8.862v6.276a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/></svg>
@@ -385,10 +377,7 @@ select option{background:var(--surface2)}
       </div>
       <button onclick="closeMeetModal()" style="background:none;border:none;color:#666;font-size:22px;cursor:pointer;line-height:1;">×</button>
     </div>
-
-    <!-- Body -->
     <div style="padding:24px;overflow-y:auto;flex:1;" id="meet-body">
-      <!-- Step 1: Not connected -->
       <div id="meet-step-connect" style="text-align:center;padding:40px 0;">
         <div style="width:56px;height:56px;background:#1e1e1e;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#FF9800" stroke-width="1.5"><path d="M15 10l4.553-2.069A1 1 0 0121 8.862v6.276a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/></svg>
@@ -400,20 +389,15 @@ select option{background:var(--surface2)}
           Conectar com Google
         </a>
       </div>
-
-      <!-- Step 2: Scan files -->
       <div id="meet-step-scan" style="display:none;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
           <div style="color:#aaa;font-size:13px;">Transcrições dos últimos 30 dias no seu Drive:</div>
           <button onclick="scanMeetings()" id="btn-scan" style="display:flex;align-items:center;gap:6px;padding:7px 14px;background:transparent;border:1px solid #333;border-radius:6px;color:#aaa;font-size:13px;cursor:pointer;">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-            Escanear
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>Escanear
           </button>
         </div>
         <div id="meet-files-list" style="display:flex;flex-direction:column;gap:8px;"></div>
       </div>
-
-      <!-- Step 3: Review extracted tasks -->
       <div id="meet-step-review" style="display:none;">
         <button onclick="showMeetScan()" style="background:none;border:none;color:#FF9800;font-size:13px;cursor:pointer;margin-bottom:16px;padding:0;">← Voltar</button>
         <div id="meet-review-title" style="font-size:16px;font-weight:600;color:#fff;margin-bottom:4px;"></div>
@@ -446,20 +430,14 @@ select option{background:var(--surface2)}
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
-
     <div class="modal-body">
-      <!-- Status -->
       <div class="section-header">Status</div>
       <div class="status-selector" id="status-selector"></div>
-
-      <!-- Row 1: Assignee + Priority -->
       <div class="section-header" style="margin-top:18px">Detalhes</div>
       <div class="field-row">
         <div class="field">
           <label>Responsável</label>
-          <select id="modal-assignee">
-            <option value="">— Ninguém —</option>
-          </select>
+          <select id="modal-assignee"><option value="">— Ninguém —</option></select>
         </div>
         <div class="field">
           <label>Prioridade</label>
@@ -471,8 +449,6 @@ select option{background:var(--surface2)}
           </select>
         </div>
       </div>
-
-      <!-- Row 2: Due date -->
       <div class="field-row">
         <div class="field">
           <label>Prazo</label>
@@ -483,26 +459,17 @@ select option{background:var(--surface2)}
           <select id="modal-dept-select"></select>
         </div>
       </div>
-
-      <!-- Description -->
       <div class="field-row single" style="margin-top:4px">
         <div class="field">
           <label>Descrição</label>
           <textarea id="modal-desc" placeholder="Descreva o que precisa ser feito…"></textarea>
         </div>
       </div>
-
-      <!-- Notify toggle -->
       <div class="notify-row">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--orange);flex-shrink:0"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
         <label for="modal-notify">Notificar time por email</label>
-        <label class="toggle">
-          <input type="checkbox" id="modal-notify" checked/>
-          <span class="toggle-slider"></span>
-        </label>
+        <label class="toggle"><input type="checkbox" id="modal-notify" checked/><span class="toggle-slider"></span></label>
       </div>
-
-      <!-- Comments -->
       <div class="section-header">Comentários</div>
       <div class="comments-list" id="comments-list"></div>
       <div class="add-comment-row">
@@ -510,7 +477,6 @@ select option{background:var(--surface2)}
         <button class="btn-comment" onclick="addComment()">Enviar</button>
       </div>
     </div>
-
     <div class="modal-footer">
       <button class="btn-delete" id="btn-delete" onclick="deleteCard()">Excluir card</button>
       <div style="display:flex;gap:8px">
@@ -525,76 +491,91 @@ select option{background:var(--surface2)}
 <div id="toast-container"></div>
 
 <script>
-// ── Constants ────────────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
 const DEPARTMENTS = [
   'Dados','Financeiro','Marketing','CS','Comercial',
   'Tech','Operações','Infra','Jurídico','Imprensa'
 ];
-const COLUMNS = [
-  { id:'backlog',     label:'Backlog',      color:'#666' },
-  { id:'andamento',   label:'Em andamento', color:'#FF9800' },
-  { id:'revisao',     label:'Revisão',      color:'#3b82f6' },
-  { id:'concluido',   label:'Concluído',    color:'#22c55e' },
+
+const DEFAULT_COLUMNS = [
+  { id:'backlog',   label:'Backlog',      color:'#666'    },
+  { id:'andamento', label:'Em andamento', color:'#FF9800' },
+  { id:'revisao',   label:'Revisão',      color:'#3b82f6' },
+  { id:'concluido', label:'Concluído',    color:'#22c55e' },
 ];
 
+const MARKETING_COLUMNS = [
+  { id:'briefing',  label:'Briefing',  color:'#a855f7' },
+  { id:'criacao',   label:'Criação',   color:'#3b82f6' },
+  { id:'revisao',   label:'Revisão',   color:'#FF9800' },
+  { id:'aprovacao', label:'Aprovação', color:'#f59e0b' },
+  { id:'publicado', label:'Publicado', color:'#22c55e' },
+  { id:'live',      label:'Live 🔴',  color:'#ef4444' },
+];
+
+const COLUMN_COLORS = ['#666','#FF9800','#3b82f6','#22c55e','#a855f7','#ef4444','#f59e0b','#06b6d4'];
 const API_BASE = '/api';
 
-// ── State ────────────────────────────────────────────────────────────────────
-let state = { cards:[], nextId:1 };
-let currentDept = DEPARTMENTS[0];
-let teamMembers = []; // loaded from server or fallback
-let serverOnline = false;
-
-// Current editing card (in modal)
-let editingCard = null; // null = new card
-let modalDept = null;
-
-// Drag state
-let dragCardId = null;
+// ── State ─────────────────────────────────────────────────────────────────────
+let state = { cards:[], nextId:1, deptColumns:{} };
+let currentDept   = DEPARTMENTS[0];
+let currentUser   = null;
+let filterAssignee = '';
+let teamMembers   = [];
+let serverOnline  = false;
+let editingCard   = null;
+let modalDept     = null;
+let dragCardId    = null;
 let dragOriginCol = null;
-
-// Sync state
 let lastUpdatedAt = 0;
-let savePending = false;
 let saveDebounceTimer = null;
+let meetExtractedData = null;
 
-// ── Sync status display ──────────────────────────────────────────────────────
-function setSyncStatus(status) {
-  // status: 'synced' | 'saving' | 'offline'
-  const dot   = document.getElementById('serverDot');
-  const label = document.getElementById('serverLabel');
-  if (status === 'synced') {
-    dot.className = 'server-dot online';
-    label.textContent = '● Sincronizado';
-    label.style.color = 'var(--green)';
-  } else if (status === 'saving') {
-    dot.className = 'server-dot';
-    dot.style.background = '#FF9800';
-    label.textContent = '● Salvando...';
-    label.style.color = '#FF9800';
-  } else {
-    dot.className = 'server-dot offline';
-    label.textContent = '● Offline';
-    label.style.color = 'var(--red)';
+// ── Column helpers ─────────────────────────────────────────────────────────────
+function getColumnsForDept(dept) {
+  if (!dept || dept === 'Geral') return DEFAULT_COLUMNS;
+  return (state.deptColumns && state.deptColumns[dept]) || DEFAULT_COLUMNS;
+}
+
+function seedDeptColumns() {
+  if (!state.deptColumns) state.deptColumns = {};
+  if (!state.deptColumns.Marketing) {
+    state.deptColumns.Marketing = MARKETING_COLUMNS.map(c => ({...c}));
+    saveStateToServer();
   }
 }
 
-// ── Server persistence ───────────────────────────────────────────────────────
+// ── Sync status ───────────────────────────────────────────────────────────────
+function setSyncStatus(status) {
+  const dot   = document.getElementById('serverDot');
+  const label = document.getElementById('serverLabel');
+  if (status === 'synced') {
+    dot.className = 'server-dot online'; dot.style.background = '';
+    label.textContent = '● Sincronizado'; label.style.color = 'var(--green)';
+  } else if (status === 'saving') {
+    dot.className = 'server-dot'; dot.style.background = '#FF9800';
+    label.textContent = '● Salvando...'; label.style.color = '#FF9800';
+  } else {
+    dot.className = 'server-dot offline'; dot.style.background = '';
+    label.textContent = '● Offline'; label.style.color = 'var(--red)';
+  }
+}
+
+// ── Server persistence ─────────────────────────────────────────────────────────
 async function loadStateFromServer() {
   try {
     const res = await fetch(`${API_BASE}/state`, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) throw new Error('server error');
     const data = await res.json();
     state = data.state;
+    if (!state.deptColumns) state.deptColumns = {};
     lastUpdatedAt = data.updated_at;
-    // ensure nextId is always larger than existing ids
-    const maxId = state.cards.reduce((m,c)=>Math.max(m,c.id||0),0);
+    const maxId = state.cards.reduce((m,c) => Math.max(m,c.id||0), 0);
     if (state.nextId <= maxId) state.nextId = maxId + 1;
     serverOnline = true;
     setSyncStatus('synced');
   } catch {
-    // fall back to default empty state + seed defaults
-    state = { cards:[], nextId:1 };
+    state = { cards:[], nextId:1, deptColumns:{} };
     serverOnline = false;
     setSyncStatus('offline');
   }
@@ -621,22 +602,22 @@ async function saveStateToServer() {
 }
 
 function saveState() {
-  // Optimistic: UI already updated. Debounce the server write.
   clearTimeout(saveDebounceTimer);
   setSyncStatus('saving');
   saveDebounceTimer = setTimeout(() => saveStateToServer(), 300);
 }
 
 async function pollState() {
-  if (saveDebounceTimer) return; // skip poll while save is pending
+  if (saveDebounceTimer) return;
   try {
     const res = await fetch(`${API_BASE}/state`, { signal: AbortSignal.timeout(4000) });
     if (!res.ok) throw new Error();
     const data = await res.json();
     if (data.updated_at > lastUpdatedAt) {
       state = data.state;
+      if (!state.deptColumns) state.deptColumns = {};
       lastUpdatedAt = data.updated_at;
-      const maxId = state.cards.reduce((m,c)=>Math.max(m,c.id||0),0);
+      const maxId = state.cards.reduce((m,c) => Math.max(m,c.id||0), 0);
       if (state.nextId <= maxId) state.nextId = maxId + 1;
       render();
     }
@@ -648,16 +629,16 @@ async function pollState() {
   }
 }
 
-// ── Default cards (used only when database is empty / server offline) ─────────
+// ── Default seeds ─────────────────────────────────────────────────────────────
 function seedDefaults() {
   if (state.cards.length > 0) return;
   const seeds = [
-    { dept:'Dados',     title:'Criar BI',                column:'andamento', priority:'Alta',  description:'Desenvolver dashboard de Business Intelligence integrado.' },
-    { dept:'Marketing', title:'Funil TPW R$97',           column:'andamento', priority:'Alta',  description:'Estruturar funil de vendas completo para o produto TPW a R$97.' },
-    { dept:'Marketing', title:'Funil TPW ticket maior',   column:'backlog',   priority:'Média', description:'Desenvolver funil de upsell para ticket mais elevado.' },
-    { dept:'Marketing', title:'Funil Webinário',          column:'andamento', priority:'Média', description:'Criar funil de captação e conversão via webinário ao vivo.' },
-    { dept:'Marketing', title:'Funil Desafio',            column:'backlog',   priority:'Baixa', description:'Estruturar funil de desafio para engajamento e conversão.' },
-    { dept:'CS',        title:'Melhora de performance',   column:'andamento', priority:'Alta',  description:'Otimizar processos de atendimento e métricas de satisfação do cliente.' },
+    { dept:'Dados',     title:'Criar BI',              column:'andamento', priority:'Alta',  description:'Desenvolver dashboard de Business Intelligence integrado.' },
+    { dept:'Marketing', title:'Funil TPW R$97',         column:'criacao',   priority:'Alta',  description:'Estruturar funil de vendas completo para o produto TPW a R$97.' },
+    { dept:'Marketing', title:'Funil TPW ticket maior', column:'briefing',  priority:'Média', description:'Desenvolver funil de upsell para ticket mais elevado.' },
+    { dept:'Marketing', title:'Funil Webinário',        column:'criacao',   priority:'Média', description:'Criar funil de captação e conversão via webinário ao vivo.' },
+    { dept:'Marketing', title:'Funil Desafio',          column:'briefing',  priority:'Baixa', description:'Estruturar funil de desafio para engajamento e conversão.' },
+    { dept:'CS',        title:'Melhora de performance', column:'andamento', priority:'Alta',  description:'Otimizar processos de atendimento e métricas de satisfação do cliente.' },
   ];
   seeds.forEach(s => {
     state.cards.push({
@@ -667,27 +648,26 @@ function seedDefaults() {
       assignee:'', dueDate:'', comments:[], createdAt: new Date().toISOString(),
     });
   });
-  // Save seeds to server so all team members see them
   saveStateToServer();
 }
 
-// ── Server / Team ─────────────────────────────────────────────────────────────
+// ── Team ──────────────────────────────────────────────────────────────────────
 const FALLBACK_TEAM = [
-  { name:'Tasso Lago',                 area:'CEO',          role:'CEO' },
-  { name:'Alexsander Vieira Junior',   area:'Tech',         role:'Dev' },
-  { name:'Head MKT',                   area:'Marketing',    role:'Copywriter' },
-  { name:'Gustavo Maciel',             area:'Marketing',    role:'Tráfego' },
-  { name:'Fabiola Tomazelli Soares',   area:'CS/Comercial', role:'CRO' },
-  { name:'Pedro Marcatto',             area:'CS',           role:'CS PL I' },
-  { name:'Victor Hugo Amaral',         area:'Operações',    role:'CFO/COO' },
-  { name:'Leonardo Guimarães',         area:'Operações',    role:'IA Sênior' },
-  { name:'Maycon Nery Brandão',        area:'Analista',     role:'Especialista' },
-  { name:'Lucas Arruda',               area:'Analista',     role:'Especialista' },
-  { name:'Gustavo Magno',              area:'Analista',     role:'Analista de Mercado' },
-  { name:'Tiago',                      area:'Infra',        role:'Infra API' },
-  { name:'Bruna Estevam',              area:'Infra',        role:'Chips/Telefones' },
-  { name:'Artemio Picanço',            area:'Jurídico',     role:'Advogado' },
-  { name:'Franciele',                  area:'Imprensa',     role:'Imprensa' },
+  { name:'Tasso Lago',               area:'CEO',          role:'CEO' },
+  { name:'Alexsander Vieira Junior', area:'Tech',         role:'Dev' },
+  { name:'Head MKT',                 area:'Marketing',    role:'Copywriter' },
+  { name:'Gustavo Maciel',           area:'Marketing',    role:'Tráfego' },
+  { name:'Fabiola Tomazelli Soares', area:'CS/Comercial', role:'CRO' },
+  { name:'Pedro Marcatto',           area:'CS',           role:'CS PL I' },
+  { name:'Victor Hugo Amaral',       area:'Operações',    role:'CFO/COO' },
+  { name:'Leonardo Guimarães',       area:'Operações',    role:'IA Sênior' },
+  { name:'Maycon Nery Brandão',      area:'Analista',     role:'Especialista' },
+  { name:'Lucas Arruda',             area:'Analista',     role:'Especialista' },
+  { name:'Gustavo Magno',            area:'Analista',     role:'Analista de Mercado' },
+  { name:'Tiago',                    area:'Infra',        role:'Infra API' },
+  { name:'Bruna Estevam',            area:'Infra',        role:'Chips/Telefones' },
+  { name:'Artemio Picanço',          area:'Jurídico',     role:'Advogado' },
+  { name:'Franciele',                area:'Imprensa',     role:'Imprensa' },
 ];
 
 async function checkServer() {
@@ -701,13 +681,17 @@ async function checkServer() {
     teamMembers = FALLBACK_TEAM;
     serverOnline = false;
   }
+  // Update assignee filter dropdown
+  const filterSel = document.getElementById('filter-assignee');
+  if (filterSel) {
+    const currentVal = filterSel.value;
+    filterSel.innerHTML = '<option value="">Todos</option>' +
+      teamMembers.map(m => `<option value="${escHtml(m.name)}"${m.name===currentVal?' selected':''}>${escHtml(m.name)}</option>`).join('');
+  }
 }
 
 async function sendNotification(type, card, assignee, changer, comment='') {
-  if (!serverOnline) {
-    toast('Servidor offline — email não enviado', 'warn');
-    return;
-  }
+  if (!serverOnline) { toast('Servidor offline — email não enviado', 'warn'); return; }
   try {
     const res = await fetch(`${API_BASE}/notify`, {
       method:'POST',
@@ -716,12 +700,9 @@ async function sendNotification(type, card, assignee, changer, comment='') {
       signal: AbortSignal.timeout(8000),
     });
     const data = await res.json();
-    if (data.ok) {
-      toast(`Email enviado para ${assignee}`, 'success');
-    } else {
-      toast(data.error || 'Falha ao enviar email', 'warn');
-    }
-  } catch(e) {
+    if (data.ok) toast(`Email enviado para ${assignee}`, 'success');
+    else toast(data.error || 'Falha ao enviar email', 'warn');
+  } catch {
     toast('Servidor offline — email não enviado', 'error');
   }
 }
@@ -731,43 +712,60 @@ function toast(msg, type='info') {
   const wrap = document.getElementById('toast-container');
   const el = document.createElement('div');
   el.className = `toast ${type}`;
-  el.innerHTML = `
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-      ${type==='success'
-        ? '<polyline points="20 6 9 17 4 12"/>'
-        : type==='error'
-          ? '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'
-          : '<path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>'
-      }
-    </svg>
-    <span>${msg}</span>`;
+  el.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+    ${type==='success'?'<polyline points="20 6 9 17 4 12"/>'
+      :type==='error'?'<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'
+      :'<path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>'}
+  </svg><span>${msg}</span>`;
   wrap.appendChild(el);
   setTimeout(() => el.remove(), 3100);
 }
 
-// ── Render ────────────────────────────────────────────────────────────────────
-function render() {
-  renderTabs();
-  renderBoard();
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+
+// ── Render ─────────────────────────────────────────────────────────────────────
+function render() { renderTabs(); renderBoard(); }
 
 function renderTabs() {
   const wrap = document.getElementById('tabs-wrap');
-  wrap.innerHTML = DEPARTMENTS.map(d => `
-    <button class="tab ${d===currentDept?'active':''}" onclick="switchDept('${d}')">${d}</button>
-  `).join('');
+  const allTabs = ['Geral', ...DEPARTMENTS];
+  wrap.innerHTML = allTabs.map(d =>
+    `<button class="tab ${d===currentDept?'active':''}" onclick="switchDept('${d}')">${d==='Geral'?'🌐 Geral':d}</button>`
+  ).join('') + `
+  <div class="filter-wrap">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text4)" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <select class="filter-select" id="filter-assignee" onchange="filterAssignee=this.value;render()">
+      <option value="">Todos</option>
+      ${teamMembers.map(m=>`<option value="${escHtml(m.name)}"${m.name===filterAssignee?' selected':''}>${escHtml(m.name)}</option>`).join('')}
+    </select>
+  </div>`;
 }
 
 function renderBoard() {
   const board = document.getElementById('board');
-  board.innerHTML = COLUMNS.map(col => {
-    const cards = state.cards.filter(c => c.dept===currentDept && c.column===col.id);
+
+  if (currentDept === 'Geral') {
+    board.style.cssText = 'flex-direction:column;overflow-x:hidden;overflow-y:auto;align-items:stretch;flex-wrap:nowrap;padding:24px;gap:0;';
+    renderGeralView(board);
+    return;
+  }
+
+  board.style.cssText = 'flex-direction:row;overflow-x:auto;overflow-y:hidden;align-items:flex-start;flex-wrap:nowrap;padding:20px 24px;gap:16px;';
+
+  const cols = getColumnsForDept(currentDept);
+  board.innerHTML = cols.map(col => {
+    let cards = state.cards.filter(c => c.dept===currentDept && c.column===col.id);
+    if (filterAssignee) cards = cards.filter(c => c.assignee===filterAssignee);
     return `
     <div class="column" id="col-${col.id}">
       <div class="col-header">
         <div class="col-dot" style="background:${col.color}"></div>
-        <div class="col-title">${col.label}</div>
-        <div class="col-count" id="count-${col.id}">${cards.length}</div>
+        <div class="col-title" id="coltitle-${col.id}"
+             ondblclick="startRenameCol('${currentDept}','${col.id}')"
+             title="Clique duplo para renomear">${escHtml(col.label)}</div>
+        <div class="col-count">${cards.length}</div>
       </div>
       <div class="col-body" id="colbody-${col.id}"
            ondragover="onDragOver(event,'${col.id}')"
@@ -783,92 +781,221 @@ function renderBoard() {
         Adicionar card
       </button>
     </div>`;
-  }).join('');
+  }).join('') + `
+  <div class="add-col-tile" id="add-col-tile" onclick="showAddColInput()">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--text4);padding:24px 16px;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <span style="font-size:12px;">Nova coluna</span>
+    </div>
+  </div>`;
+}
+
+// ── Geral view ─────────────────────────────────────────────────────────────────
+function renderGeralView(board) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const filteredCards = c => !filterAssignee || c.assignee===filterAssignee;
+  const activeDepts = DEPARTMENTS.filter(d => state.cards.filter(c => c.dept===d && filteredCards(c)).length > 0);
+
+  const allCards = state.cards.filter(filteredCards);
+  const overdueCards = allCards.filter(c => {
+    if (!c.dueDate) return false;
+    const cols = getColumnsForDept(c.dept);
+    const lastColId = cols[cols.length-1]?.id;
+    return new Date(c.dueDate+'T00:00') < today && c.column !== lastColId;
+  });
+
+  if (!activeDepts.length) {
+    board.innerHTML = `<div style="padding:60px;text-align:center;color:var(--text4);">
+      ${filterAssignee ? `Nenhum card atribuído a <strong>${escHtml(filterAssignee)}</strong>` : 'Nenhum card criado ainda.'}
+    </div>`;
+    return;
+  }
+
+  board.innerHTML = `
+  <div class="geral-stats">
+    <div class="geral-stat"><span>${allCards.length}</span><div>Total</div></div>
+    ${DEPARTMENTS.map(d => {
+      const n = state.cards.filter(c => c.dept===d && filteredCards(c)).length;
+      return n ? `<div class="geral-stat"><span>${n}</span><div>${d}</div></div>` : '';
+    }).join('')}
+    ${overdueCards.length ? `<div class="geral-stat" style="border-color:rgba(239,68,68,.3)"><span style="color:var(--red)">⚠ ${overdueCards.length}</span><div style="color:rgba(239,68,68,.6)">Atrasados</div></div>` : ''}
+  </div>
+  ${activeDepts.map(dept => {
+    const cards = state.cards.filter(c => c.dept===dept && filteredCards(c));
+    const columns = getColumnsForDept(dept);
+    return `
+    <div class="geral-section">
+      <div class="geral-section-header">
+        <span class="dept-name">${dept}</span>
+        <span class="geral-count">${cards.length}</span>
+        <div class="geral-divider"></div>
+      </div>
+      <div class="geral-grid">
+        ${cards.map(c => renderGeralCard(c, columns, today)).join('')}
+      </div>
+    </div>`;
+  }).join('')}`;
+}
+
+function renderGeralCard(c, columns, today) {
+  const col = columns.find(col => col.id===c.column) || columns[0];
+  const colColor = col?.color || '#666';
+  const lastColId = columns[columns.length-1]?.id;
+  const isOverdue = c.dueDate && new Date(c.dueDate+'T00:00') < today && c.column !== lastColId;
+  const pClass = c.priority ? `p-${c.priority}` : '';
+  const initials = c.assignee ? c.assignee.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase() : '';
+  const dueStr = c.dueDate ? new Date(c.dueDate+'T00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'short'}) : '';
+  return `
+  <div class="geral-card${isOverdue?' overdue':''}" onclick="openModal(${c.id})" style="border-left-color:${isOverdue?'var(--red)':colColor}">
+    ${c.priority?`<span class="card-priority ${pClass}" style="margin-bottom:6px;display:inline-block;">${c.priority}</span>`:''}
+    <div class="geral-card-title">${escHtml(c.title||'Sem título')}</div>
+    <div class="geral-card-meta">
+      <span class="geral-status-badge" style="background:${colColor}20;color:${colColor};border:1px solid ${colColor}40;">${col?.label||'—'}</span>
+      ${isOverdue?`<span style="font-size:10px;color:var(--red);font-weight:600;">⚠ Atrasado</span>`:''}
+      ${dueStr&&!isOverdue?`<span class="card-tag"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${dueStr}</span>`:''}
+      ${c.assignee?`<div class="card-assignee-avatar" title="${escHtml(c.assignee)}" style="margin-left:auto;width:20px;height:20px;font-size:8px;">${initials}</div>`:''}
+    </div>
+  </div>`;
 }
 
 function renderCard(c) {
+  const cols = getColumnsForDept(c.dept || currentDept);
+  const lastColId = cols[cols.length-1]?.id;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const isOverdue = c.dueDate && new Date(c.dueDate+'T00:00') < today && c.column !== lastColId;
   const pClass = c.priority ? `p-${c.priority}` : '';
   const initials = c.assignee ? c.assignee.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase() : '';
   const dueStr = c.dueDate ? new Date(c.dueDate+'T00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'short'}) : '';
   const commentCount = (c.comments||[]).length;
   return `
-  <div class="card" id="card-${c.id}"
+  <div class="card${isOverdue?' overdue':''}" id="card-${c.id}"
        draggable="true"
        ondragstart="onDragStart(event,${c.id},'${c.column}')"
        ondragend="onDragEnd(event)"
        onclick="openModal(${c.id})">
+    ${isOverdue?'<span class="overdue-label">⚠ Atrasado</span>':''}
     ${c.priority?`<span class="card-priority ${pClass}">${c.priority}</span>`:''}
     <div class="card-title">${escHtml(c.title||'Sem título')}</div>
     ${c.description?`<div class="card-desc">${escHtml(c.description)}</div>`:''}
     <div class="card-meta">
-      ${dueStr?`<span class="card-tag">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-        ${dueStr}</span>`:''}
-      ${commentCount?`<span class="card-comments-badge">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-        ${commentCount}</span>`:''}
+      ${dueStr?`<span class="card-tag"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${dueStr}</span>`:''}
+      ${commentCount?`<span class="card-comments-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>${commentCount}</span>`:''}
       ${c.assignee?`<div class="card-assignee-avatar" title="${escHtml(c.assignee)}">${initials}</div>`:''}
     </div>
   </div>`;
 }
 
-function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-// ── Switch Dept ───────────────────────────────────────────────────────────────
+// ── Switch Dept ────────────────────────────────────────────────────────────────
 function switchDept(d) {
   currentDept = d;
-  document.getElementById('board-title').textContent = d;
+  document.getElementById('board-title').textContent = d === 'Geral' ? 'Visão Geral' : d;
+  render();
+}
+
+// ── Column management ─────────────────────────────────────────────────────────
+function showAddColInput() {
+  const tile = document.getElementById('add-col-tile');
+  if (!tile) return;
+  tile.style.cursor = 'default';
+  tile.onclick = null;
+  tile.innerHTML = `
+    <div style="padding:16px 12px;display:flex;flex-direction:column;gap:8px;width:100%;">
+      <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:2px;">Nome da coluna</div>
+      <input type="text" id="new-col-input" placeholder="Ex: Em teste…" maxlength="30"
+        style="background:var(--surface2);border:1px solid var(--orange);border-radius:6px;color:#fff;padding:8px 10px;font-size:13px;outline:none;font-family:inherit;"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();confirmAddCol();}if(event.key==='Escape')render();"/>
+      <div style="display:flex;gap:6px;">
+        <button onclick="confirmAddCol()" style="flex:1;padding:7px;background:var(--orange);border:none;border-radius:6px;color:#000;font-size:12px;font-weight:700;cursor:pointer;">Criar</button>
+        <button onclick="render()" style="padding:7px 10px;background:transparent;border:1px solid var(--border2);border-radius:6px;color:var(--text3);font-size:12px;cursor:pointer;">✕</button>
+      </div>
+    </div>`;
+  setTimeout(() => document.getElementById('new-col-input')?.focus(), 50);
+}
+
+function confirmAddCol() {
+  const input = document.getElementById('new-col-input');
+  const name = input?.value?.trim();
+  if (!name) return;
+  if (!state.deptColumns[currentDept]) {
+    state.deptColumns[currentDept] = getColumnsForDept(currentDept).map(c => ({...c}));
+  }
+  const id = name.toLowerCase().replace(/[^a-z0-9]/g,'-') + '-' + Date.now().toString(36);
+  const color = COLUMN_COLORS[state.deptColumns[currentDept].length % COLUMN_COLORS.length];
+  state.deptColumns[currentDept].push({ id, label: name, color });
+  saveState();
+  render();
+  toast(`Coluna "${name}" criada`, 'success');
+}
+
+function startRenameCol(dept, colId) {
+  const el = document.getElementById('coltitle-' + colId);
+  if (!el) return;
+  const current = el.textContent;
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.value = current;
+  inp.id = 'coltitle-' + colId;
+  inp.style.cssText = 'background:transparent;border:none;border-bottom:1px solid var(--orange);color:#fff;font-size:13px;font-weight:600;flex:1;outline:none;padding:0;font-family:inherit;min-width:0;width:100%;';
+  let saved = false;
+  inp.onblur = () => {
+    if (saved) return;
+    saved = true;
+    saveRenameCol(dept, colId, inp.value.trim() || current);
+  };
+  inp.onkeydown = e => {
+    if (e.key === 'Enter') { e.preventDefault(); saved = true; saveRenameCol(dept, colId, inp.value.trim() || current); }
+    if (e.key === 'Escape') { saved = true; render(); }
+  };
+  el.replaceWith(inp);
+  inp.focus();
+  inp.select();
+}
+
+function saveRenameCol(dept, colId, newName) {
+  if (!newName) return render();
+  if (!state.deptColumns[dept]) {
+    state.deptColumns[dept] = getColumnsForDept(dept).map(c => ({...c}));
+  }
+  const col = state.deptColumns[dept].find(c => c.id === colId);
+  if (col) { col.label = newName; saveState(); }
   render();
 }
 
 // ── Drag & Drop ───────────────────────────────────────────────────────────────
 function onDragStart(e, cardId, colId) {
-  dragCardId = cardId;
-  dragOriginCol = colId;
-  setTimeout(() => {
-    const el = document.getElementById(`card-${cardId}`);
-    if (el) el.classList.add('dragging');
-  }, 0);
+  dragCardId = cardId; dragOriginCol = colId;
+  setTimeout(() => { document.getElementById(`card-${cardId}`)?.classList.add('dragging'); }, 0);
   e.dataTransfer.effectAllowed = 'move';
 }
-function onDragEnd(e) {
-  if (dragCardId) {
-    const el = document.getElementById(`card-${dragCardId}`);
-    if (el) el.classList.remove('dragging');
-  }
-  document.querySelectorAll('.col-body').forEach(b=>b.classList.remove('drag-over'));
+function onDragEnd() {
+  document.getElementById(`card-${dragCardId}`)?.classList.remove('dragging');
+  document.querySelectorAll('.col-body').forEach(b => b.classList.remove('drag-over'));
 }
 function onDragOver(e, colId) {
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  document.getElementById(`colbody-${colId}`).classList.add('drag-over');
+  e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+  document.getElementById(`colbody-${colId}`)?.classList.add('drag-over');
 }
 function onDragLeave(e, colId) {
-  document.getElementById(`colbody-${colId}`).classList.remove('drag-over');
+  document.getElementById(`colbody-${colId}`)?.classList.remove('drag-over');
 }
 async function onDrop(e, colId) {
   e.preventDefault();
-  document.querySelectorAll('.col-body').forEach(b=>b.classList.remove('drag-over'));
+  document.querySelectorAll('.col-body').forEach(b => b.classList.remove('drag-over'));
   if (!dragCardId || dragOriginCol === colId) return;
-  const card = state.cards.find(c=>c.id===dragCardId);
+  const card = state.cards.find(c => c.id===dragCardId);
   if (!card) return;
-  const prevCol = card.column;
   card.column = colId;
-  saveState();
-  render();
-  // notify
-  const colLabel = COLUMNS.find(c=>c.id===colId)?.label || colId;
-  card.status = colLabel;
-  if (card.assignee && document.getElementById('modal-notify')?.checked !== false) {
-    await sendNotification('status_changed', card, card.assignee, 'Sistema');
-  }
+  saveState(); render();
+  const cols = getColumnsForDept(card.dept || currentDept);
+  const colLabel = cols.find(c => c.id===colId)?.label || colId;
+  if (card.assignee) await sendNotification('status_changed', {...card, status:colLabel}, card.assignee, currentUser?.name||'Sistema');
 }
 
-// ── Modal ─────────────────────────────────────────────────────────────────────
+// ── Modal ──────────────────────────────────────────────────────────────────────
 function openModal(cardId, dept, defaultCol) {
-  // Populate assignee dropdown
+  const realDept = (!dept || dept === 'Geral') ? DEPARTMENTS[0] : dept;
+
+  // Assignee dropdown
   const sel = document.getElementById('modal-assignee');
   sel.innerHTML = '<option value="">— Ninguém —</option>';
   teamMembers.forEach(m => {
@@ -878,25 +1005,17 @@ function openModal(cardId, dept, defaultCol) {
     sel.appendChild(opt);
   });
 
-  // Populate dept dropdown
+  // Dept dropdown
   const deptSel = document.getElementById('modal-dept-select');
-  deptSel.innerHTML = DEPARTMENTS.map(d=>`<option value="${d}" ${d===(dept||currentDept)?'selected':''}>${d}</option>`).join('');
-
-  // Status selector
-  const statusSel = document.getElementById('status-selector');
-  statusSel.innerHTML = COLUMNS.map(col=>
-    `<button type="button" class="status-opt" data-col="${col.id}" style="border-color:${col.color}33">${col.label}</button>`
-  ).join('');
-  statusSel.querySelectorAll('.status-opt').forEach(btn => {
-    btn.onclick = () => {
-      statusSel.querySelectorAll('.status-opt').forEach(b=>b.classList.remove('selected'));
-      btn.classList.add('selected');
-    };
-  });
+  deptSel.innerHTML = DEPARTMENTS.map(d => `<option value="${d}"${d===realDept?' selected':''}>${d}</option>`).join('');
+  deptSel.onchange = () => {
+    document.getElementById('modal-dept-badge').textContent = deptSel.value;
+    refreshStatusSelector();
+  };
 
   if (cardId === null) {
-    // New card
     editingCard = null;
+    modalDept = realDept;
     document.getElementById('modal-title-input').value = '';
     document.getElementById('modal-assignee').value = '';
     document.getElementById('modal-priority').value = '';
@@ -906,38 +1025,46 @@ function openModal(cardId, dept, defaultCol) {
     document.getElementById('comment-input').value = '';
     document.getElementById('btn-delete').style.display = 'none';
     document.getElementById('modal-notify').checked = true;
-    modalDept = dept || currentDept;
-    document.getElementById('modal-dept-badge').textContent = modalDept;
-    // Select default column
-    const col = defaultCol || 'backlog';
-    const btn = statusSel.querySelector(`[data-col="${col}"]`);
-    if (btn) btn.classList.add('selected');
-    else statusSel.querySelector('.status-opt')?.classList.add('selected');
+    document.getElementById('modal-dept-badge').textContent = realDept;
+    refreshStatusSelector(defaultCol || getColumnsForDept(realDept)[0]?.id);
   } else {
-    // Existing card
-    const card = state.cards.find(c=>c.id===cardId);
+    const card = state.cards.find(c => c.id===cardId);
     if (!card) return;
     editingCard = card;
     modalDept = card.dept;
+    deptSel.value = card.dept;
     document.getElementById('modal-title-input').value = card.title || '';
     document.getElementById('modal-assignee').value = card.assignee || '';
     document.getElementById('modal-priority').value = card.priority || '';
     document.getElementById('modal-due').value = card.dueDate || '';
     document.getElementById('modal-desc').value = card.description || '';
     document.getElementById('modal-dept-badge').textContent = card.dept;
-    deptSel.value = card.dept;
     document.getElementById('btn-delete').style.display = '';
     document.getElementById('modal-notify').checked = true;
     document.getElementById('comment-input').value = '';
-    // Select current col
-    const btn = statusSel.querySelector(`[data-col="${card.column}"]`);
-    if (btn) btn.classList.add('selected');
-    // Render comments
+    refreshStatusSelector(card.column);
     renderComments(card.comments||[]);
   }
 
   document.getElementById('modal-overlay').classList.add('open');
-  setTimeout(()=>document.getElementById('modal-title-input').focus(), 100);
+  setTimeout(() => document.getElementById('modal-title-input').focus(), 100);
+}
+
+function refreshStatusSelector(selectedColId) {
+  const deptSel = document.getElementById('modal-dept-select');
+  const dept = deptSel?.value || modalDept || currentDept;
+  const cols = getColumnsForDept(dept === 'Geral' ? DEPARTMENTS[0] : dept);
+  const selId = selectedColId || cols[0]?.id;
+  const statusSel = document.getElementById('status-selector');
+  statusSel.innerHTML = cols.map(col =>
+    `<button type="button" class="status-opt${selId===col.id?' selected':''}" data-col="${col.id}" style="border-color:${col.color}33;">${escHtml(col.label)}</button>`
+  ).join('');
+  statusSel.querySelectorAll('.status-opt').forEach(btn => {
+    btn.onclick = () => {
+      statusSel.querySelectorAll('.status-opt').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+    };
+  });
 }
 
 function renderComments(comments) {
@@ -946,8 +1073,7 @@ function renderComments(comments) {
   list.innerHTML = comments.map(c => {
     const initials = c.author.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
     const time = new Date(c.ts).toLocaleString('pt-BR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
-    return `
-    <div class="comment-item">
+    return `<div class="comment-item">
       <div class="comment-meta">
         <div class="comment-avatar">${initials}</div>
         <span class="comment-author">${escHtml(c.author)}</span>
@@ -962,77 +1088,63 @@ function closeModal() {
   document.getElementById('modal-overlay').classList.remove('open');
   editingCard = null;
 }
-
 function handleOverlayClick(e) {
   if (e.target === document.getElementById('modal-overlay')) closeModal();
 }
 
 async function saveModal() {
-  const title    = document.getElementById('modal-title-input').value.trim();
+  const title = document.getElementById('modal-title-input').value.trim();
   if (!title) { toast('Insira um título para o card', 'warn'); return; }
 
-  const column   = document.querySelector('.status-opt.selected')?.dataset.col || 'backlog';
+  const column   = document.querySelector('.status-opt.selected')?.dataset.col;
   const assignee = document.getElementById('modal-assignee').value;
   const priority = document.getElementById('modal-priority').value;
   const dueDate  = document.getElementById('modal-due').value;
   const desc     = document.getElementById('modal-desc').value.trim();
   const dept     = document.getElementById('modal-dept-select').value;
   const notify   = document.getElementById('modal-notify').checked;
+  const cols     = getColumnsForDept(dept);
+  const finalCol = column || cols[0]?.id || 'backlog';
 
   if (editingCard) {
     const prevAssignee = editingCard.assignee;
     const prevCol      = editingCard.column;
-    editingCard.title       = title;
-    editingCard.column      = column;
-    editingCard.assignee    = assignee;
-    editingCard.priority    = priority;
-    editingCard.dueDate     = dueDate;
-    editingCard.description = desc;
-    editingCard.dept        = dept;
+    editingCard.title = title; editingCard.column = finalCol; editingCard.assignee = assignee;
+    editingCard.priority = priority; editingCard.dueDate = dueDate; editingCard.description = desc; editingCard.dept = dept;
     saveState();
-    // Notifications
     if (notify && assignee) {
-      if (prevAssignee !== assignee) {
-        const colLabel = COLUMNS.find(c=>c.id===column)?.label || column;
-        await sendNotification('assigned', {...editingCard, status: colLabel}, assignee, 'Você');
-      } else if (prevCol !== column) {
-        const colLabel = COLUMNS.find(c=>c.id===column)?.label || column;
-        await sendNotification('status_changed', {...editingCard, status: colLabel}, assignee, 'Você');
-      }
+      const colLabel = cols.find(c=>c.id===finalCol)?.label || finalCol;
+      if (prevAssignee !== assignee) await sendNotification('assigned', {...editingCard, status:colLabel}, assignee, currentUser?.name||'Você');
+      else if (prevCol !== finalCol) await sendNotification('status_changed', {...editingCard, status:colLabel}, assignee, currentUser?.name||'Você');
     }
   } else {
     const newCard = {
-      id: state.nextId++,
-      dept, title, column, assignee, priority, dueDate,
+      id: state.nextId++, dept, title, column: finalCol, assignee, priority, dueDate,
       description: desc, comments:[], createdAt: new Date().toISOString(),
     };
     state.cards.push(newCard);
     saveState();
     if (notify && assignee) {
-      const colLabel = COLUMNS.find(c=>c.id===column)?.label || column;
-      await sendNotification('assigned', {...newCard, status: colLabel}, assignee, 'Você');
+      const colLabel = cols.find(c=>c.id===finalCol)?.label || finalCol;
+      await sendNotification('assigned', {...newCard, status:colLabel}, assignee, currentUser?.name||'Você');
     }
   }
-
-  render();
-  closeModal();
+  render(); closeModal();
 }
 
 async function addComment() {
   const input = document.getElementById('comment-input');
-  const text  = input.value.trim();
+  const text = input.value.trim();
   if (!text) return;
-
-  const author = 'Você'; // In a real app this would be the logged-in user
+  // FIX #1: use real logged-in user name
+  const author = currentUser?.name || 'Você';
   const comment = { author, text, ts: new Date().toISOString() };
-
   if (editingCard) {
     if (!editingCard.comments) editingCard.comments = [];
     editingCard.comments.push(comment);
     saveState();
     renderComments(editingCard.comments);
     input.value = '';
-    // Notify
     if (document.getElementById('modal-notify').checked && editingCard.assignee) {
       await sendNotification('comment', editingCard, editingCard.assignee, author, text);
     }
@@ -1042,36 +1154,25 @@ async function addComment() {
 function deleteCard() {
   if (!editingCard) return;
   if (!confirm(`Excluir o card "${editingCard.title}"?`)) return;
-  state.cards = state.cards.filter(c=>c.id!==editingCard.id);
-  saveState();
-  render();
-  closeModal();
+  state.cards = state.cards.filter(c => c.id!==editingCard.id);
+  saveState(); render(); closeModal();
 }
 
-// ── Keyboard shortcut ─────────────────────────────────────────────────────────
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeModal();
-});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
 // ── Google Meet Integration ───────────────────────────────────────────────────
-let meetExtractedData = null;
-
 async function openMeetModal() {
-  const overlay = document.getElementById('meet-overlay');
-  overlay.style.display = 'flex';
-  // Check Google connection
+  document.getElementById('meet-overlay').style.display = 'flex';
   try {
     const r = await fetch('/api/google/status');
     const data = await r.json();
-    if (data.connected) {
-      showMeetScan();
-      scanMeetings();
-    } else {
+    if (data.connected) { showMeetScan(); scanMeetings(); }
+    else {
       document.getElementById('meet-step-connect').style.display = 'block';
       document.getElementById('meet-step-scan').style.display = 'none';
       document.getElementById('meet-step-review').style.display = 'none';
     }
-  } catch { }
+  } catch {}
 }
 
 function closeMeetModal() {
@@ -1088,20 +1189,19 @@ function showMeetScan() {
 async function scanMeetings() {
   const btn = document.getElementById('btn-scan');
   const list = document.getElementById('meet-files-list');
-  btn.textContent = 'Escaneando…';
-  btn.disabled = true;
+  btn.textContent = 'Escaneando…'; btn.disabled = true;
   list.innerHTML = '<div style="color:#666;font-size:13px;padding:20px 0;text-align:center;">Buscando transcrições no Drive…</div>';
   try {
     const r = await fetch('/api/meetings/scan');
     const data = await r.json();
     btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg> Escanear';
     btn.disabled = false;
-    if (!data.ok || !data.files.length) {
+    if (!data.ok || !data.files?.length) {
       list.innerHTML = '<div style="color:#666;font-size:13px;padding:20px 0;text-align:center;">Nenhuma transcrição encontrada nos últimos 30 dias.<br/><span style="font-size:12px;">Certifique-se de que a gravação estava ativa na reunião.</span></div>';
       return;
     }
     list.innerHTML = data.files.map(f => {
-      const date = new Date(f.modifiedTime || f.createdTime).toLocaleDateString('pt-BR');
+      const date = new Date(f.modifiedTime||f.createdTime).toLocaleDateString('pt-BR');
       return `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#1e1e1e;border:1px solid #2a2a2a;border-radius:8px;gap:12px;">
         <div style="min-width:0;">
           <div style="font-size:14px;color:#e0e0e0;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(f.name)}</div>
@@ -1114,20 +1214,17 @@ async function scanMeetings() {
       </div>`;
     }).join('');
   } catch(err) {
-    btn.textContent = 'Escanear';
-    btn.disabled = false;
+    btn.textContent = 'Escanear'; btn.disabled = false;
     list.innerHTML = `<div style="color:#ef4444;font-size:13px;padding:12px;">Erro: ${err.message}</div>`;
   }
 }
 
 async function processMeeting(fileId, fileName, btn) {
   const orig = btn.textContent;
-  btn.textContent = '…';
-  btn.disabled = true;
+  btn.textContent = '…'; btn.disabled = true;
   try {
     const r = await fetch('/api/meetings/process', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ fileId, fileName }),
     });
     const data = await r.json();
@@ -1135,8 +1232,7 @@ async function processMeeting(fileId, fileName, btn) {
     meetExtractedData = data;
     showMeetReview(data);
   } catch(err) {
-    btn.textContent = orig;
-    btn.disabled = false;
+    btn.textContent = orig; btn.disabled = false;
     alert('Erro ao processar: ' + err.message);
   }
 }
@@ -1147,36 +1243,43 @@ function showMeetReview(data) {
   document.getElementById('meet-review-title').textContent = data.meetingTitle || data.fileName;
   document.getElementById('meet-review-summary').textContent = data.summary || '';
 
-  const DEPT_MAP = {'Tech':'Tech','Marketing':'Marketing','CS':'CS','Comercial':'Comercial','Dados':'Dados','Financeiro':'Financeiro','Operações':'Operações','Infra':'Infra','Jurídico':'Jurídico','Imprensa':'Imprensa'};
-
   const list = document.getElementById('meet-tasks-list');
-  list.innerHTML = (data.tasks || []).map((t, i) => `
+  // FIX #5: use teamMembers (not undefined teamList), add priority dropdown
+  list.innerHTML = (data.tasks||[]).map((t, i) => `
     <div style="background:#1e1e1e;border:1px solid #2a2a2a;border-left:3px solid #FF9800;border-radius:8px;padding:14px 16px;" id="meet-task-${i}">
       <div style="display:flex;align-items:flex-start;gap:10px;">
         <input type="checkbox" checked id="mt-check-${i}" style="margin-top:3px;accent-color:#FF9800;width:15px;height:15px;flex-shrink:0;"/>
         <div style="flex:1;min-width:0;">
-          <input type="text" value="${escHtml(t.title)}" id="mt-title-${i}" style="width:100%;background:transparent;border:none;border-bottom:1px solid #333;color:#fff;font-size:14px;font-weight:500;padding:0 0 4px;margin-bottom:10px;outline:none;"/>
+          <input type="text" value="${escHtml(t.title)}" id="mt-title-${i}" style="width:100%;background:transparent;border:none;border-bottom:1px solid #333;color:#fff;font-size:14px;font-weight:500;padding:0 0 4px;margin-bottom:10px;outline:none;font-family:inherit;"/>
           <div style="display:flex;gap:10px;flex-wrap:wrap;">
-            <div style="flex:1;min-width:120px;">
-              <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px;">Responsável</div>
-              <select id="mt-assignee-${i}" style="width:100%;background:#252525;border:1px solid #333;border-radius:4px;color:#ccc;font-size:12px;padding:4px 8px;">
-                <option value="">— Ninguém —</option>
-                ${teamList.map(m => `<option value="${escHtml(m.name)}" ${m.name === t.assignee ? 'selected' : ''}>${escHtml(m.name)}</option>`).join('')}
-              </select>
-            </div>
-            <div style="flex:1;min-width:120px;">
-              <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px;">Departamento</div>
-              <select id="mt-dept-${i}" style="width:100%;background:#252525;border:1px solid #333;border-radius:4px;color:#ccc;font-size:12px;padding:4px 8px;">
-                <option value="">—</option>
-                ${DEPARTMENTS.map(d => `<option value="${d}" ${d === t.department ? 'selected' : ''}>${d}</option>`).join('')}
-              </select>
-            </div>
             <div style="flex:1;min-width:110px;">
+              <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px;">Responsável</div>
+              <select id="mt-assignee-${i}" style="width:100%;background:#252525;border:1px solid #333;border-radius:4px;color:#ccc;font-size:12px;padding:4px 8px;font-family:inherit;">
+                <option value="">— Ninguém —</option>
+                ${teamMembers.map(m=>`<option value="${escHtml(m.name)}"${m.name===t.assignee?' selected':''}>${escHtml(m.name)}</option>`).join('')}
+              </select>
+            </div>
+            <div style="flex:1;min-width:100px;">
+              <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px;">Setor</div>
+              <select id="mt-dept-${i}" style="width:100%;background:#252525;border:1px solid #333;border-radius:4px;color:#ccc;font-size:12px;padding:4px 8px;font-family:inherit;">
+                <option value="">—</option>
+                ${DEPARTMENTS.map(d=>`<option value="${d}"${d===t.department?' selected':''}>${d}</option>`).join('')}
+              </select>
+            </div>
+            <div style="flex:1;min-width:90px;">
+              <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px;">Prioridade</div>
+              <select id="mt-priority-${i}" style="width:100%;background:#252525;border:1px solid #333;border-radius:4px;color:#ccc;font-size:12px;padding:4px 8px;font-family:inherit;">
+                <option value="Média"${(!t.priority||t.priority==='Média')?' selected':''}>Média</option>
+                <option value="Alta"${t.priority==='Alta'?' selected':''}>Alta</option>
+                <option value="Baixa"${t.priority==='Baixa'?' selected':''}>Baixa</option>
+              </select>
+            </div>
+            <div style="flex:1;min-width:100px;">
               <div style="font-size:10px;color:#555;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px;">Prazo</div>
-              <input type="date" id="mt-due-${i}" value="${t.dueDate || ''}" style="width:100%;background:#252525;border:1px solid #333;border-radius:4px;color:#ccc;font-size:12px;padding:4px 8px;"/>
+              <input type="date" id="mt-due-${i}" value="${t.dueDate||''}" style="width:100%;background:#252525;border:1px solid #333;border-radius:4px;color:#ccc;font-size:12px;padding:4px 8px;font-family:inherit;"/>
             </div>
           </div>
-          ${t.notes ? `<div style="margin-top:8px;font-size:12px;color:#666;font-style:italic;">${escHtml(t.notes)}</div>` : ''}
+          ${t.notes?`<div style="margin-top:8px;font-size:12px;color:#666;font-style:italic;">${escHtml(t.notes)}</div>`:''}
         </div>
       </div>
     </div>`).join('');
@@ -1187,33 +1290,35 @@ function createMeetCards() {
   if (!data?.tasks?.length) return;
   let created = 0;
   data.tasks.forEach((t, i) => {
-    const checked = document.getElementById(`mt-check-${i}`)?.checked;
-    if (!checked) return;
+    if (!document.getElementById(`mt-check-${i}`)?.checked) return;
     const title    = document.getElementById(`mt-title-${i}`)?.value || t.title;
     const assignee = document.getElementById(`mt-assignee-${i}`)?.value || '';
     const dept     = document.getElementById(`mt-dept-${i}`)?.value || DEPARTMENTS[0];
+    const priority = document.getElementById(`mt-priority-${i}`)?.value || 'Média';
     const dueDate  = document.getElementById(`mt-due-${i}`)?.value || '';
-    const id = ++state.nextId;
-    state.cards.push({
-      id, title, department: dept,
-      column: 'backlog', priority: 'Média',
-      assignee, dueDate, description: t.notes || '',
-      progress: 0, notify: !!assignee,
-      comments: [], createdAt: new Date().toISOString(),
-    });
+    // FIX #2: use correct `dept` field + correct first column for the dept
+    const cols = getColumnsForDept(dept);
+    const firstCol = cols[0]?.id || 'backlog';
+    const newCard = {
+      id: state.nextId++,
+      dept,         // FIX: was `department`
+      title, column: firstCol, priority, assignee, dueDate,
+      description: t.notes || '',
+      comments:[], createdAt: new Date().toISOString(),
+    };
+    state.cards.push(newCard);
     created++;
     if (assignee) {
       fetch('/api/notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'assigned', card: state.cards[state.cards.length - 1], assignee, changer: 'IA · Reunião: ' + data.meetingTitle }),
-      }).catch(() => {});
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ type:'assigned', card:newCard, assignee, changer:'IA · Reunião: '+data.meetingTitle }),
+      }).catch(()=>{});
     }
   });
   saveStateToServer();
   render();
   closeMeetModal();
-  alert(`✅ ${created} card${created !== 1 ? 's' : ''} criado${created !== 1 ? 's' : ''} no Kanban!`);
+  toast(`${created} card${created!==1?'s':''} criado${created!==1?'s':''} no Kanban!`, 'success');
 }
 
 // ── Show logged-in user ───────────────────────────────────────────────────────
@@ -1221,18 +1326,18 @@ const ADMIN_EMAILS_CLIENT = ['tassolago@financialmove.com.br'];
 
 fetch('/api/me').then(r => r.json()).then(({ user }) => {
   if (!user) return;
+  currentUser = user; // FIX #1: store for use in comments
   const el = document.getElementById('user-info');
   el.innerHTML = `
-    ${user.picture ? `<img src="${user.picture}" style="width:26px;height:26px;border-radius:50%;object-fit:cover;" referrerpolicy="no-referrer"/>` : ''}
-    <span style="font-size:12px;color:#888;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${user.name || user.email}</span>
-    <a href="/logout" style="font-size:11px;color:#555;text-decoration:none;padding:3px 8px;border:1px solid #333;border-radius:4px;white-space:nowrap;" title="Sair">Sair</a>`;
+    ${user.picture?`<img src="${user.picture}" style="width:26px;height:26px;border-radius:50%;object-fit:cover;" referrerpolicy="no-referrer"/>`:''}
+    <span style="font-size:12px;color:#888;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${user.name||user.email}</span>
+    <a href="/logout" style="font-size:11px;color:#555;text-decoration:none;padding:3px 8px;border:1px solid #333;border-radius:4px;white-space:nowrap;">Sair</a>`;
   if (ADMIN_EMAILS_CLIENT.includes(user.email)) {
     document.getElementById('admin-link').innerHTML =
       `<a href="/admin" style="font-size:11px;color:#FF9800;text-decoration:none;padding:3px 8px;border:1px solid #FF980050;border-radius:4px;white-space:nowrap;">⚙ Admin</a>`;
   }
-}).catch(() => {});
+}).catch(()=>{});
 
-// Check if returning from Google OAuth
 if (new URLSearchParams(location.search).get('google') === 'connected') {
   history.replaceState({}, '', '/');
   setTimeout(openMeetModal, 500);
@@ -1240,16 +1345,15 @@ if (new URLSearchParams(location.search).get('google') === 'connected') {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 (async () => {
-  setSyncStatus('saving'); // show loading state
+  setSyncStatus('saving');
   await loadStateFromServer();
-  seedDefaults();
+  seedDeptColumns();   // sets Marketing columns if not yet defined
+  seedDefaults();      // seeds example cards only if board is empty
   await checkServer();
   currentDept = DEPARTMENTS[0];
   document.getElementById('board-title').textContent = currentDept;
   render();
-  // Poll for remote changes every 15s
   setInterval(pollState, 15000);
-  // Refresh team list every 60s
   setInterval(checkServer, 60000);
 })();
 </script>

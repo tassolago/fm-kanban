@@ -640,7 +640,8 @@ Para cada tarefa identifique:
 - título: descrição curta e clara da tarefa (máx 60 chars)
 - assignee: nome EXATO de um membro do time acima, ou null se não mencionado
 - dueDate: data no formato YYYY-MM-DD se mencionada, ou null
-- department: área/departamento se inferível, ou null
+- department: área/departamento se inferível (Dados, Financeiro, Marketing, CS, Comercial, Tech, Operações, Infra, Jurídico, Imprensa), ou null
+- priority: "Alta" se urgente/crítico/bloqueante/ASAP/prazo próximo, "Baixa" se pode esperar/não prioritário/longo prazo, "Média" nos demais casos
 - notes: contexto relevante (máx 100 chars)
 
 Responda SOMENTE com JSON válido, sem markdown, sem explicações:
@@ -653,6 +654,7 @@ Responda SOMENTE com JSON válido, sem markdown, sem explicações:
       "assignee": "...",
       "dueDate": "...",
       "department": "...",
+      "priority": "Alta|Média|Baixa",
       "notes": "..."
     }
   ]
