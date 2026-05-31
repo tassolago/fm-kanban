@@ -359,8 +359,8 @@ function buildEmailHtml({ subject, headline, body, ctaLabel, ctaUrl }) {
 
 function cardMetaHtml(card) {
   const priority = card.priority || '—';
-  const dept     = card.department || '—';
-  const due      = card.dueDate ? new Date(card.dueDate).toLocaleDateString('pt-BR') : '—';
+  const dept     = card.dept || card.department || '—';
+  const due      = card.dueDate ? new Date(card.dueDate + 'T00:00').toLocaleDateString('pt-BR') : '—';
   const status   = card.status || card.column || '—';
   return `
   <div class="card-box">
@@ -1171,22 +1171,26 @@ function maybeRunDeadlineScan() {
   setLastScanDate(todayBRT());
   scanDeadlines();
 }
-setInterval(maybeRunDeadlineScan, 30 * 60 * 1000); // a cada 30 min
-
 // Endpoint manual para testar o scan agora (admin only)
 app.post('/api/debug/scan-deadlines', requireAdmin, async (req, res) => {
   await scanDeadlines();
   res.json({ ok: true, message: 'Scan executado — veja os logs.' });
 });
 
-// ── Start ─────────────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`\n🚀 Financial Move Kanban Server`);
-  console.log(`   URL:    http://localhost:${PORT}`);
-  console.log(`   API:    http://localhost:${PORT}/api/state`);
-  console.log(`   Gmail:  ${gmailUser || '(not configured)'}`);
-  console.log(`   Team:   ${getFullTeam().length} membros (${teamWithEmail().length} com email)`);
-  console.log(`   State:  ${stateFile}\n`);
-  // Checa prazos logo após subir (se já passou das 8h e ainda não rodou hoje)
-  setTimeout(maybeRunDeadlineScan, 10000);
-});
+// Exporta builders para scripts de teste (sem subir o servidor)
+module.exports = { buildAssignedEmail, buildStatusChangedEmail, buildCommentEmail, buildDeadlineEmail };
+
+// ── Start (só quando executado direto, não quando importado) ────────────────────
+if (require.main === module) {
+  setInterval(maybeRunDeadlineScan, 30 * 60 * 1000); // a cada 30 min
+  app.listen(PORT, () => {
+    console.log(`\n🚀 Financial Move Kanban Server`);
+    console.log(`   URL:    http://localhost:${PORT}`);
+    console.log(`   API:    http://localhost:${PORT}/api/state`);
+    console.log(`   Gmail:  ${gmailUser || '(not configured)'}`);
+    console.log(`   Team:   ${getFullTeam().length} membros (${teamWithEmail().length} com email)`);
+    console.log(`   State:  ${stateFile}\n`);
+    // Checa prazos logo após subir (se já passou das 8h e ainda não rodou hoje)
+    setTimeout(maybeRunDeadlineScan, 10000);
+  });
+}
