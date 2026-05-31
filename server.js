@@ -923,9 +923,9 @@ async function load() {
         <input type="text" id="role-\${i}" value="\${m.role || ''}" placeholder="Ex: Analista" style="width:160px;" oninput="markDirty(\${i})"/>
       </td>
       <td>
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#aaa;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
           <input type="checkbox" id="head-\${i}" \${m.headOf && m.headOf === m.area ? 'checked' : ''} onchange="markDirty(\${i})" style="width:16px;height:16px;accent-color:#FF9800;cursor:pointer;"/>
-          <span id="head-label-\${i}">\${m.headOf && m.headOf === m.area ? 'Chefe de '+m.area : 'Subordinado'}</span>
+          <span id="head-label-\${i}" style="color:\${m.headOf && m.headOf === m.area ? '#FF9800' : '#555'};font-weight:\${m.headOf && m.headOf === m.area ? '600' : '400'};">\${m.headOf && m.headOf === m.area ? 'Chefe de '+m.area : 'Marcar como chefe'}</span>
         </label>
       </td>
       <td class="joined">\${joined}</td>
@@ -957,7 +957,11 @@ async function save(i, email) {
     body: JSON.stringify({ area, role, headOf }),
   });
   const lbl = document.getElementById('head-label-' + i);
-  if (lbl) lbl.textContent = isHead ? 'Chefe de ' + area : 'Subordinado';
+  if (lbl) {
+    lbl.textContent = isHead ? 'Chefe de ' + area : 'Marcar como chefe';
+    lbl.style.color = isHead ? '#FF9800' : '#555';
+    lbl.style.fontWeight = isHead ? '600' : '400';
+  }
   btn.textContent = 'Salvar';
   btn.disabled = false;
   btn.classList.remove('visible');
