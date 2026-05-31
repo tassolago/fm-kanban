@@ -228,7 +228,16 @@ app.get('/logout', (req, res) => {
 
 // Endpoint para o frontend saber quem está logado
 app.get('/api/me', (req, res) => {
-  res.json({ user: req.session.user || null });
+  if (!req.session.user) return res.json({ user: null });
+  const { email, name, picture } = req.session.user;
+  const member = getFullTeam().find(m => m.email === email);
+  res.json({ user: {
+    email, name, picture,
+    area:   member?.area || '',
+    role:   member?.role || '',
+    headOf: member?.headOf || '',       // setor que ele chefia ('' = subordinado)
+    isAdmin: ADMIN_EMAILS.includes(email),
+  }});
 });
 
 // ── Nodemailer transporter ────────────────────────────────────────────────────
@@ -865,12 +874,13 @@ select{cursor:pointer;}
           <th>Usuário</th>
           <th>Setor</th>
           <th>Cargo</th>
+          <th>Chefe do setor</th>
           <th>Desde</th>
           <th></th>
         </tr>
       </thead>
       <tbody id="tbody">
-        <tr><td colspan="5" style="text-align:center;color:#555;padding:32px;">Carregando…</td></tr>
+        <tr><td colspan="6" style="text-align:center;color:#555;padding:32px;">Carregando…</td></tr>
       </tbody>
     </table>
   </div>
@@ -884,7 +894,7 @@ async function load() {
   const { team } = await r.json();
   const tbody = document.getElementById('tbody');
   if (!team.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#555;padding:32px;">Nenhum usuário registrado ainda.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#555;padding:32px;">Nenhum usuário registrado ainda.</td></tr>';
     return;
   }
   tbody.innerHTML = team.map((m, i) => {
@@ -912,6 +922,12 @@ async function load() {
       <td>
         <input type="text" id="role-\${i}" value="\${m.role || ''}" placeholder="Ex: Analista" style="width:160px;" oninput="markDirty(\${i})"/>
       </td>
+      <td>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#aaa;">
+          <input type="checkbox" id="head-\${i}" \${m.headOf && m.headOf === m.area ? 'checked' : ''} onchange="markDirty(\${i})" style="width:16px;height:16px;accent-color:#FF9800;cursor:pointer;"/>
+          <span id="head-label-\${i}">\${m.headOf && m.headOf === m.area ? 'Chefe de '+m.area : 'Subordinado'}</span>
+        </label>
+      </td>
       <td class="joined">\${joined}</td>
       <td>
         <button class="btn-save" id="save-\${i}" onclick="save(\${i}, '\${m.email}')">Salvar</button>
@@ -929,14 +945,19 @@ function markDirty(i) {
 async function save(i, email) {
   const area = document.getElementById('area-' + i).value;
   const role = document.getElementById('role-' + i).value.trim();
+  const isHead = document.getElementById('head-' + i).checked;
+  const headOf = isHead ? area : '';
   const btn  = document.getElementById('save-' + i);
+  if (isHead && !area) { alert('Defina o setor antes de marcar como chefe.'); return; }
   btn.textContent = '…';
   btn.disabled = true;
   await fetch('/api/admin/team/' + encodeURIComponent(email), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ area, role }),
+    body: JSON.stringify({ area, role, headOf }),
   });
+  const lbl = document.getElementById('head-label-' + i);
+  if (lbl) lbl.textContent = isHead ? 'Chefe de ' + area : 'Subordinado';
   btn.textContent = 'Salvar';
   btn.disabled = false;
   btn.classList.remove('visible');
@@ -1025,17 +1046,18 @@ app.post('/api/admin/team/add', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-// API: update a member's area and role (admin only)
+// API: update a member's area, role and headOf (admin only)
 app.post('/api/admin/team/:email', requireAdmin, (req, res) => {
   const email = decodeURIComponent(req.params.email);
-  const { area, role } = req.body;
+  const { area, role, headOf } = req.body;
   const members = loadDynamicTeam();
-  const member = members.find(m => m.email === email);
+  let member = members.find(m => m.email === email);
   if (!member) {
     // Add from config.js if not yet in dynamic team
     const fromConfig = team.find(m => m.email === email);
     if (fromConfig) {
-      members.push({ ...fromConfig, area: area ?? fromConfig.area, role: role ?? fromConfig.role, joinedAt: null, picture: '' });
+      member = { ...fromConfig, area: area ?? fromConfig.area, role: role ?? fromConfig.role, joinedAt: null, picture: '' };
+      members.push(member);
     } else {
       return res.status(404).json({ ok: false, error: 'Usuário não encontrado' });
     }
@@ -1043,8 +1065,19 @@ app.post('/api/admin/team/:email', requireAdmin, (req, res) => {
     if (area !== undefined) member.area = area;
     if (role !== undefined) member.role = role;
   }
+
+  if (headOf !== undefined) {
+    member.headOf = headOf || '';
+    // Garante UM ÚNICO chefe por setor: remove o headOf de qualquer outro do mesmo setor
+    if (headOf) {
+      members.forEach(m => {
+        if (m.email !== email && m.headOf === headOf) m.headOf = '';
+      });
+    }
+  }
+
   saveDynamicTeam(members);
-  console.log(`[${timestamp()}] ✏️  Admin update: ${email} → setor=${area} cargo=${role}`);
+  console.log(`[${timestamp()}] ✏️  Admin update: ${email} → setor=${area} cargo=${role} chefe=${member.headOf || '—'}`);
   res.json({ ok: true });
 });
 
