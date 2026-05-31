@@ -1356,6 +1356,7 @@ async function scanDeadlines() {
   const today = new Date(); today.setHours(0, 0, 0, 0);
 
   let alerts = 0;
+  const feedEntries = [];
   for (const card of cards) {
     if (!card.dueDate || !card.assignee) continue;
     if (isCardDone(card)) continue; // card concluído, não alerta
@@ -1388,10 +1389,26 @@ async function scanDeadlines() {
         html,
       });
       alerts++;
+      // Também registra no feed de atividades
+      const titleEsc = String(card.title || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const respEsc  = String(card.assignee || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const txt = type === 'overdue'
+        ? `⚠️ Prazo vencido: <b>${titleEsc}</b> (há ${Math.abs(diffDays)}d) — resp. ${respEsc}`
+        : `⏰ Prazo se aproximando: <b>${titleEsc}</b> (${diffDays===0?'vence hoje':'em '+diffDays+'d'}) — resp. ${respEsc}`;
+      feedEntries.push({ id: Date.now() + Math.random(), ts: new Date().toISOString(), user: '🤖 Robô de prazos', text: txt });
       console.log(`[${timestamp()}] ${type==='overdue'?'⚠️':'⏰'} alerta de prazo → ${[...recipients].join(', ')} | card: "${card.title}" (${diffDays}d)`);
     } catch (err) {
       console.error(`[${timestamp()}] ❌ Falha ao enviar alerta de prazo "${card.title}":`, err.message);
     }
+  }
+
+  // Grava os alertas no feed de atividades (lê estado fresco p/ não sobrescrever)
+  if (feedEntries.length) {
+    const fresh = readState();
+    if (!fresh.state.activity) fresh.state.activity = [];
+    fresh.state.activity.unshift(...feedEntries);
+    if (fresh.state.activity.length > 120) fresh.state.activity = fresh.state.activity.slice(0, 120);
+    writeState(fresh.state);
   }
   console.log(`[${timestamp()}] 📬 Scan de prazos concluído — ${alerts} alerta(s) enviado(s).`);
 }
