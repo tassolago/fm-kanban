@@ -240,10 +240,35 @@ const transporter = nodemailer.createTransport({
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const teamWithEmail = () => team.filter(m => m.email && m.email.trim() !== '');
+// IMPORTANTE: usa getFullTeam() (usuários registrados no login + config.js),
+// NÃO a lista estática `team` que fica vazia no Railway.
+const teamWithEmail = () => getFullTeam().filter(m => m.email && m.email.trim() !== '');
 
 function memberByName(name) {
-  return team.find(m => m.name === name) || null;
+  return getFullTeam().find(m => m.name === name) || null;
+}
+
+function adminEmailsWithName() {
+  return ADMIN_EMAILS;
+}
+
+// Colunas por setor no servidor (espelha o frontend) — usado para detectar card "concluído"
+const SRV_DEFAULT_COLUMNS = [
+  { id:'backlog',   label:'Backlog' },
+  { id:'andamento', label:'Em andamento' },
+  { id:'revisao',   label:'Revisão' },
+  { id:'concluido', label:'Concluído' },
+];
+function getServerColumns(dept) {
+  const raw = readState();
+  const dc = raw.state && raw.state.deptColumns;
+  if (dc && dc[dept]) return dc[dept];
+  return SRV_DEFAULT_COLUMNS;
+}
+function isCardDone(card) {
+  const cols = getServerColumns(card.dept);
+  const lastId = cols[cols.length - 1]?.id;
+  return card.column === lastId;
 }
 
 function timestamp() {
@@ -390,6 +415,33 @@ function buildCommentEmail({ card, assignee, changer, comment }) {
   });
 }
 
+function buildDeadlineEmail({ card, type, diffDays }) {
+  const isOverdue = type === 'overdue';
+  const accent = isOverdue ? '#ef4444' : '#FF9800';
+  let prazoTexto;
+  if (isOverdue) {
+    const dias = Math.abs(diffDays);
+    prazoTexto = `Este card está <strong style="color:${accent};">VENCIDO há ${dias} dia${dias!==1?'s':''}</strong>.`;
+  } else if (diffDays === 0) {
+    prazoTexto = `O prazo deste card é <strong style="color:${accent};">HOJE</strong>.`;
+  } else {
+    prazoTexto = `O prazo deste card vence em <strong style="color:${accent};">${diffDays} dia${diffDays!==1?'s':''}</strong>.`;
+  }
+  const body = `
+    <div class="message">
+      Olá <strong style="color:${accent};">${card.assignee || 'time'}</strong>, ${prazoTexto}
+      ${isOverdue ? 'Atualize o status ou solicite ajuste de prazo ao seu gestor.' : 'Garanta a entrega no prazo ou avise antecipadamente se precisar de mais tempo.'}
+    </div>
+    ${cardMetaHtml(card)}`;
+  return buildEmailHtml({
+    subject:  isOverdue ? `⚠️ [Kanban FM] Prazo VENCIDO: ${card.title}` : `⏰ [Kanban FM] Prazo se aproximando: ${card.title}`,
+    headline: isOverdue ? `⚠️ Prazo vencido` : `⏰ Prazo se aproximando`,
+    body,
+    ctaLabel: 'Abrir no Kanban →',
+    ctaUrl:   appUrl,
+  });
+}
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 // Serve index.html
@@ -479,9 +531,14 @@ app.post('/api/notify', async (req, res) => {
         return res.status(400).json({ ok: false, error: 'Assignee has no email configured' });
       }
 
-      const ccList = teamWithEmail()
-        .filter(m => m.email !== assigneeMember.email)
-        .map(m => m.email);
+      // CC: admin (Tasso) + chefe do setor — não o time inteiro (evita spam)
+      const full = getFullTeam();
+      const ccSet = new Set();
+      ADMIN_EMAILS.forEach(e => ccSet.add(e));
+      const head = full.find(m => m.headOf === card.dept && m.email);
+      if (head) ccSet.add(head.email);
+      ccSet.delete(assigneeMember.email); // não duplica o destinatário
+      const ccList = [...ccSet];
 
       const html = buildAssignedEmail({ card, assignee, changer });
       const info = await transporter.sendMail({
@@ -991,12 +1048,98 @@ app.post('/api/admin/team/:email', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Robô de alertas de prazo (agendado) ────────────────────────────────────────
+const lastScanFile = path.join(dataDir, 'last-deadline-scan.json');
+
+function todayBRT() {
+  // YYYY-MM-DD no fuso de São Paulo
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+}
+function hourBRT() {
+  return parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo', hour: '2-digit', hour12: false }), 10);
+}
+function getLastScanDate() {
+  try { return JSON.parse(fs.readFileSync(lastScanFile, 'utf-8')).date; } catch { return null; }
+}
+function setLastScanDate(date) {
+  try { fs.writeFileSync(lastScanFile, JSON.stringify({ date }), 'utf-8'); } catch {}
+}
+
+// Escaneia todos os cards e envia alertas de prazo vencendo / vencido
+async function scanDeadlines() {
+  if (!gmailUser || !gmailPassword) {
+    console.warn(`[${timestamp()}] ⚠️  Scan de prazos pulado — Gmail não configurado.`);
+    return;
+  }
+  const { state } = readState();
+  const cards = (state && state.cards) || [];
+  const full = getFullTeam();
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+
+  let alerts = 0;
+  for (const card of cards) {
+    if (!card.dueDate || !card.assignee) continue;
+    if (isCardDone(card)) continue; // card concluído, não alerta
+
+    const due = new Date(card.dueDate + 'T00:00');
+    const diffDays = Math.round((due - today) / 86400000);
+
+    let type = null;
+    if (diffDays < 0) type = 'overdue';            // vencido
+    else if (diffDays <= 2) type = 'approaching';  // vence hoje, amanhã ou em 2 dias
+    if (!type) continue;
+
+    // Destinatários: responsável + chefe do setor + admin (Tasso)
+    const recipients = new Set();
+    const assigneeMember = full.find(m => m.name === card.assignee && m.email);
+    if (assigneeMember) recipients.add(assigneeMember.email);
+    const head = full.find(m => m.headOf === card.dept && m.email);
+    if (head) recipients.add(head.email);
+    ADMIN_EMAILS.forEach(e => recipients.add(e));
+    if (!recipients.size) continue;
+
+    try {
+      const html = buildDeadlineEmail({ card, type, diffDays });
+      await transporter.sendMail({
+        from:    `"Financial Move Kanban" <${gmailUser}>`,
+        to:      [...recipients].join(', '),
+        subject: type === 'overdue'
+          ? `⚠️ [Kanban FM] Prazo VENCIDO: ${card.title}`
+          : `⏰ [Kanban FM] Prazo se aproximando: ${card.title}`,
+        html,
+      });
+      alerts++;
+      console.log(`[${timestamp()}] ${type==='overdue'?'⚠️':'⏰'} alerta de prazo → ${[...recipients].join(', ')} | card: "${card.title}" (${diffDays}d)`);
+    } catch (err) {
+      console.error(`[${timestamp()}] ❌ Falha ao enviar alerta de prazo "${card.title}":`, err.message);
+    }
+  }
+  console.log(`[${timestamp()}] 📬 Scan de prazos concluído — ${alerts} alerta(s) enviado(s).`);
+}
+
+// Roda 1x por dia, a partir das 8h BRT. Checa a cada 30 min.
+function maybeRunDeadlineScan() {
+  if (hourBRT() < 8) return;
+  if (getLastScanDate() === todayBRT()) return; // já rodou hoje
+  setLastScanDate(todayBRT());
+  scanDeadlines();
+}
+setInterval(maybeRunDeadlineScan, 30 * 60 * 1000); // a cada 30 min
+
+// Endpoint manual para testar o scan agora (admin only)
+app.post('/api/debug/scan-deadlines', requireAdmin, async (req, res) => {
+  await scanDeadlines();
+  res.json({ ok: true, message: 'Scan executado — veja os logs.' });
+});
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`\n🚀 Financial Move Kanban Server`);
   console.log(`   URL:    http://localhost:${PORT}`);
   console.log(`   API:    http://localhost:${PORT}/api/state`);
   console.log(`   Gmail:  ${gmailUser || '(not configured)'}`);
-  console.log(`   Team:   ${team.length} members (${teamWithEmail().length} with email)`);
+  console.log(`   Team:   ${getFullTeam().length} membros (${teamWithEmail().length} com email)`);
   console.log(`   State:  ${stateFile}\n`);
+  // Checa prazos logo após subir (se já passou das 8h e ainda não rodou hoje)
+  setTimeout(maybeRunDeadlineScan, 10000);
 });
