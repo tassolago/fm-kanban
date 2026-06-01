@@ -590,6 +590,58 @@ app.get('/api/state', (req, res) => {
 });
 
 // Save kanban state
+// Importação de cards (ata de reunião) — admin (sessão) OU token via header.
+// Pula cards cujo título já existe (evita duplicar com cards já criados).
+app.post('/api/admin/import-cards', (req, res) => {
+  const token = req.headers['x-import-token'];
+  const sessionEmail = req.session?.user?.email || '';
+  const isAdmin = ADMIN_EMAILS.includes(sessionEmail);
+  const tokenOk = process.env.IMPORT_TOKEN && token === process.env.IMPORT_TOKEN;
+  if (!isAdmin && !tokenOk) return res.status(403).json({ ok: false, error: 'Não autorizado' });
+
+  const incoming = Array.isArray(req.body.cards) ? req.body.cards : [];
+  if (!incoming.length) return res.status(400).json({ ok: false, error: 'Sem cards' });
+
+  const { state } = readState();
+  if (!state.cards) state.cards = [];
+  if (!state.activity) state.activity = [];
+  let nextId = Math.max(state.nextId || 1, state.cards.reduce((m,c)=>Math.max(m,c.id||0),0) + 1);
+
+  const norm = s => String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  const existing = new Set(state.cards.map(c => norm(c.title)));
+
+  const firstCol = (dept) => {
+    const dc = state.deptColumns && state.deptColumns[dept];
+    return (dc && dc[0] && dc[0].id) || 'backlog';
+  };
+
+  const created = [], skipped = [];
+  for (const c of incoming) {
+    if (existing.has(norm(c.title))) { skipped.push(c.title); continue; }
+    const card = {
+      id: nextId++,
+      dept: c.dept || '',
+      title: c.title || 'Sem título',
+      column: firstCol(c.dept),
+      assignee: c.assignee || '',
+      priority: c.priority || 'Média',
+      dueDate: c.dueDate || '',
+      description: c.description || '',
+      comments: [], createdAt: new Date().toISOString(),
+    };
+    state.cards.push(card);
+    existing.add(norm(card.title));
+    state.activity.unshift({ id: Date.now() + Math.random(), ts: new Date().toISOString(),
+      user: '🤖 Ata da reunião', text: `criou <b>${(card.title||'').replace(/</g,'&lt;')}</b> em ${card.dept}${card.assignee ? ' · resp. '+card.assignee : ''}` });
+    created.push(card.title);
+  }
+  state.nextId = nextId;
+  if (state.activity.length > 120) state.activity = state.activity.slice(0,120);
+  const updated_at = writeState(state);
+  console.log(`[${timestamp()}] 📥 Import: ${created.length} criado(s), ${skipped.length} pulado(s)`);
+  res.json({ ok: true, created, skipped, updated_at });
+});
+
 app.post('/api/state', (req, res) => {
   const { state, baseUpdatedAt } = req.body;
   if (!state) return res.status(400).json({ ok: false, error: 'Missing state' });
