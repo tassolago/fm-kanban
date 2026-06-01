@@ -278,19 +278,34 @@ app.get('/api/me', (req, res) => {
   const member = getFullTeam().find(m => m.email === email);
   const area = member?.area || '';
   const meHeads = headDepts(member);
-  // Quem é o chefe do setor do usuário (se ele mesmo não for o chefe)
+  const isAdmin = ADMIN_EMAILS.includes(email);
+  const ehChefeDeSetor = meHeads.length > 0;
+
+  // "Chefe de todos" = primeiro admin (topo da hierarquia)
+  const topChief = getFullTeam().find(m => ADMIN_EMAILS.includes(m.email));
+  const topChiefName = topChief?.name || ADMIN_EMAILS[0];
+
+  // Cadeia: subordinado → chefe do setor → chefe de todos (admin)
   let chefe = '';
-  if (area && !meHeads.includes(area)) {
-    const head = getFullTeam().find(m => headDepts(m).includes(area));
-    if (head && head.email !== email) chefe = head.name;
+  if (!isAdmin) {
+    if (area && !meHeads.includes(area)) {
+      // subordinado: chefe é o chefe do setor (se houver); senão, o chefe de todos
+      const head = getFullTeam().find(m => headDepts(m).includes(area) && m.email !== email);
+      chefe = head ? head.name : topChiefName;
+    } else {
+      // chefe de setor (ou sem setor): responde ao chefe de todos
+      chefe = topChiefName;
+    }
   }
+
   res.json({ user: {
     email, name, picture,
     area,
     role:   member?.role || '',
     headOf: meHeads,                                    // setores que ele chefia (array)
-    chefe,                                              // nome do chefe do setor dele ('' se for chefe/sem setor)
-    isAdmin: ADMIN_EMAILS.includes(email),
+    isHead: ehChefeDeSetor,                             // é chefe de algum setor
+    chefe,                                              // nome do chefe dele na hierarquia ('' se for o topo)
+    isAdmin,
     isFinal: (email || '').toLowerCase() === FINAL_APPROVER, // aprovador final (COO)
   }});
 });
