@@ -794,30 +794,32 @@ app.get('/api/meetings/scan', async (req, res) => {
   try {
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-    // Search for Meet transcript Google Docs
+    // Search for Meet transcripts AND Gemini meeting notes Google Docs
     const r1 = await drive.files.list({
-      q: `mimeType='application/vnd.google-apps.document' and modifiedTime > '${since}' and (name contains 'Transcript' or name contains 'Transcrição' or name contains 'transcrição' or name contains 'Meet')`,
+      q: `mimeType='application/vnd.google-apps.document' and modifiedTime > '${since}' and (` +
+         `name contains 'Transcript' or name contains 'Transcrição' or name contains 'transcrição' or name contains 'Meet' ` +
+         `or name contains 'Anotações' or name contains 'Anotações do Gemini' or name contains 'Notes by Gemini' ` +
+         `or name contains 'Gemini' or name contains 'Notas' or name contains 'Alinhamento' or name contains 'Reunião' or name contains 'Reuniao')`,
       fields: 'files(id, name, createdTime, modifiedTime, webViewLink)',
       orderBy: 'modifiedTime desc',
-      pageSize: 20,
+      pageSize: 30,
     });
 
-    // Also scan Meet Recordings folder for docs
+    // Also scan known folders Gemini/Meet usam ('Meet Recordings', 'Gemini')
     const folderR = await drive.files.list({
-      q: `name='Meet Recordings' and mimeType='application/vnd.google-apps.folder'`,
+      q: `(name='Meet Recordings' or name='Gemini' or name contains 'Gemini') and mimeType='application/vnd.google-apps.folder'`,
       fields: 'files(id)',
     });
 
     let extraFiles = [];
-    if (folderR.data.files?.length) {
-      const folderId = folderR.data.files[0].id;
+    for (const folder of (folderR.data.files || [])) {
       const r2 = await drive.files.list({
-        q: `'${folderId}' in parents and modifiedTime > '${since}' and mimeType='application/vnd.google-apps.document'`,
+        q: `'${folder.id}' in parents and modifiedTime > '${since}' and mimeType='application/vnd.google-apps.document'`,
         fields: 'files(id, name, createdTime, modifiedTime, webViewLink)',
         orderBy: 'modifiedTime desc',
-        pageSize: 10,
+        pageSize: 20,
       });
-      extraFiles = r2.data.files || [];
+      extraFiles.push(...(r2.data.files || []));
     }
 
     const all = [...(r1.data.files || []), ...extraFiles];
