@@ -935,11 +935,15 @@ body{background:#0f0f0f;color:#e0e0e0;font-family:'Inter',sans-serif;min-height:
 .badge{background:#FF9800;color:#000;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.5px;}
 .back{margin-left:auto;font-size:13px;color:#666;text-decoration:none;padding:6px 14px;border:1px solid #333;border-radius:6px;}
 .back:hover{color:#FF9800;border-color:#FF9800;}
-.container{max-width:1000px;margin:36px auto;padding:0 24px;}
+.container{max-width:1100px;margin:36px auto;padding:0 24px;}
+.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.table-scroll::-webkit-scrollbar{height:10px;}
+.table-scroll::-webkit-scrollbar-thumb{background:#333;border-radius:5px;}
+.table-scroll::-webkit-scrollbar-track{background:#1a1a1a;}
 h1{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;margin-bottom:6px;}
 .sub{color:#666;font-size:14px;margin-bottom:28px;}
 .card{background:#161616;border:1px solid #2a2a2a;border-radius:12px;overflow:hidden;}
-table{width:100%;border-collapse:collapse;}
+table{width:100%;min-width:860px;border-collapse:collapse;}
 th{padding:12px 16px;text-align:left;font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.8px;border-bottom:1px solid #222;font-weight:500;}
 td{padding:12px 16px;border-bottom:1px solid #1e1e1e;font-size:14px;vertical-align:middle;}
 tr:last-child td{border-bottom:none;}
@@ -976,21 +980,23 @@ select{cursor:pointer;}
   <p class="sub">Usuários registrados ao fazer login. Adicione manualmente quem ainda não logou.</p>
 
   <div class="card">
-    <table>
-      <thead>
-        <tr>
-          <th>Usuário</th>
-          <th>Setor</th>
-          <th>Cargo</th>
-          <th>Chefe do setor</th>
-          <th>Desde</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="tbody">
-        <tr><td colspan="6" style="text-align:center;color:#555;padding:32px;">Carregando…</td></tr>
-      </tbody>
-    </table>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Usuário</th>
+            <th>Setor</th>
+            <th>Cargo</th>
+            <th>Chefe do setor</th>
+            <th>Desde</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="6" style="text-align:center;color:#555;padding:32px;">Carregando…</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 
@@ -1058,10 +1064,22 @@ function markDirty(i) {
 
 function toggleHeadMenu(i) {
   const menu = document.getElementById('head-menu-' + i);
+  const btn  = document.getElementById('head-btn-' + i);
   const open = menu.style.display === 'block';
   // fecha todos
   document.querySelectorAll('[id^="head-menu-"]').forEach(m => m.style.display = 'none');
-  menu.style.display = open ? 'none' : 'block';
+  if (open) return;
+  // posiciona como popup fixo (não é cortado pela rolagem horizontal da tabela)
+  const r = btn.getBoundingClientRect();
+  menu.style.position = 'fixed';
+  menu.style.top = (r.bottom + 4) + 'px';
+  menu.style.left = r.left + 'px';
+  menu.style.display = 'block';
+  // se passar do rodapé, abre pra cima
+  const mh = menu.offsetHeight;
+  if (r.bottom + 4 + mh > window.innerHeight) {
+    menu.style.top = Math.max(8, r.top - mh - 4) + 'px';
+  }
 }
 
 function headValues(i) {
