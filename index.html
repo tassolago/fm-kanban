@@ -368,7 +368,7 @@ select option{background:var(--surface2)}
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 10l4.553-2.069A1 1 0 0121 8.862v6.276a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/></svg>
     Reuniões
   </button>
-  <button class="btn-add-card" id="btn-novo-card" onclick="openModal(null, currentDept==='Geral'?DEPARTMENTS[0]:currentDept)">
+  <button class="btn-add-card" id="btn-novo-card" onclick="openModal(null, (currentDept==='Geral'||currentDept==='Minhas')?DEPARTMENTS[0]:currentDept)">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     Novo Card
   </button>
@@ -749,9 +749,10 @@ function render() { renderTabs(); renderBoard(); }
 
 function renderTabs() {
   const wrap = document.getElementById('tabs-wrap');
-  const allTabs = ['Geral', ...DEPARTMENTS];
+  const allTabs = ['Minhas', 'Geral', ...DEPARTMENTS];
+  const label = d => d==='Geral' ? '🌐 Geral' : (d==='Minhas' ? '👤 Minhas' : d);
   wrap.innerHTML = allTabs.map(d =>
-    `<button class="tab ${d===currentDept?'active':''}" onclick="switchDept('${d}')">${d==='Geral'?'🌐 Geral':d}</button>`
+    `<button class="tab ${d===currentDept?'active':''}" onclick="switchDept('${d}')">${label(d)}</button>`
   ).join('') + `
   <div class="filter-wrap">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text4)" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -764,6 +765,12 @@ function renderTabs() {
 
 function renderBoard() {
   const board = document.getElementById('board');
+
+  if (currentDept === 'Minhas') {
+    board.style.cssText = 'flex-direction:column;overflow-x:hidden;overflow-y:auto;align-items:stretch;flex-wrap:nowrap;padding:24px;gap:0;';
+    renderMyView(board);
+    return;
+  }
 
   if (currentDept === 'Geral') {
     board.style.cssText = 'flex-direction:column;overflow-x:hidden;overflow-y:auto;align-items:stretch;flex-wrap:nowrap;padding:24px;gap:0;';
@@ -807,6 +814,70 @@ function renderBoard() {
       <span style="font-size:12px;">Nova coluna</span>
     </div>
   </div>`;
+}
+
+// ── Minhas atribuições (área pessoal) ───────────────────────────────────────────
+function renderMyView(board) {
+  const me = currentUser?.name;
+  if (!me) {
+    board.innerHTML = '<div style="padding:60px;text-align:center;color:var(--text4);">Carregando seu usuário…</div>';
+    return;
+  }
+  const today = new Date(); today.setHours(0,0,0,0);
+  const mine = state.cards.filter(c => c.assignee === me);
+
+  const isDone = c => {
+    const cols = getColumnsForDept(c.dept);
+    return c.column === cols[cols.length-1]?.id;
+  };
+  const isOverdue = c => c.dueDate && new Date(c.dueDate+'T00:00') < today && !isDone(c);
+
+  const pendentes = mine.filter(c => !isDone(c));
+  const atrasados = mine.filter(isOverdue);
+  const concluidos = mine.filter(isDone);
+
+  if (!mine.length) {
+    board.innerHTML = `<div style="padding:60px;text-align:center;color:var(--text4);">
+      Você não tem cards atribuídos no momento. 🎉</div>`;
+    return;
+  }
+
+  // Ordena pendentes: atrasados primeiro, depois por prazo mais próximo
+  const sortByDue = (a,b) => {
+    const da = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+    const db = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+    return da - db;
+  };
+  const pendOrd = [...pendentes].sort(sortByDue);
+
+  const section = (titulo, lista, vazio) => {
+    if (!lista.length) return '';
+    return `
+    <div class="geral-section">
+      <div class="geral-section-header">
+        <span class="dept-name">${titulo}</span>
+        <span class="geral-count">${lista.length}</span>
+        <div class="geral-divider"></div>
+      </div>
+      <div class="geral-grid">
+        ${lista.map(c => renderGeralCard(c, getColumnsForDept(c.dept), today)).join('')}
+      </div>
+    </div>`;
+  };
+
+  board.innerHTML = `
+  <div style="margin-bottom:8px;">
+    <div style="font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:600;color:#fff;">Minhas atribuições</div>
+    <div style="font-size:13px;color:var(--text3);margin-top:2px;">Cards atribuídos a você, de todos os setores</div>
+  </div>
+  <div class="geral-stats" style="margin-top:18px;">
+    <div class="geral-stat"><span>${pendentes.length}</span><div>Pendentes</div></div>
+    ${atrasados.length ? `<div class="geral-stat" style="border-color:rgba(239,68,68,.3)"><span style="color:var(--red)">⚠ ${atrasados.length}</span><div style="color:rgba(239,68,68,.6)">Atrasados</div></div>` : ''}
+    <div class="geral-stat"><span>${concluidos.length}</span><div>Concluídos</div></div>
+    <div class="geral-stat"><span>${mine.length}</span><div>Total</div></div>
+  </div>
+  ${section('⏳ A fazer / em andamento', pendOrd)}
+  ${section('✅ Concluídos', concluidos)}`;
 }
 
 // ── Geral view ─────────────────────────────────────────────────────────────────
@@ -907,7 +978,8 @@ function renderCard(c) {
 // ── Switch Dept ────────────────────────────────────────────────────────────────
 function switchDept(d) {
   currentDept = d;
-  document.getElementById('board-title').textContent = d === 'Geral' ? 'Visão Geral' : d;
+  const title = d === 'Geral' ? 'Visão Geral' : (d === 'Minhas' ? 'Minhas atribuições' : d);
+  document.getElementById('board-title').textContent = title;
   render();
 }
 
@@ -1013,7 +1085,7 @@ async function onDrop(e, colId) {
 
 // ── Modal ──────────────────────────────────────────────────────────────────────
 function openModal(cardId, dept, defaultCol) {
-  const realDept = (!dept || dept === 'Geral') ? DEPARTMENTS[0] : dept;
+  const realDept = (!dept || dept === 'Geral' || dept === 'Minhas') ? DEPARTMENTS[0] : dept;
 
   // Assignee dropdown
   const sel = document.getElementById('modal-assignee');
@@ -1345,6 +1417,8 @@ fetch('/api/me').then(r => r.json()).then(({ user }) => {
     document.getElementById('admin-link').innerHTML =
       `<a href="/admin" style="font-size:11px;color:#FF9800;text-decoration:none;padding:3px 8px;border:1px solid #FF980050;border-radius:4px;white-space:nowrap;">⚙ Admin</a>`;
   }
+  // Re-renderiza pra preencher a aba "Minhas" assim que o usuário carrega
+  if (currentDept === 'Minhas') render();
 }).catch(()=>{});
 
 if (new URLSearchParams(location.search).get('google') === 'connected') {
@@ -1359,8 +1433,8 @@ if (new URLSearchParams(location.search).get('google') === 'connected') {
   seedDeptColumns();   // sets Marketing columns if not yet defined
   seedDefaults();      // seeds example cards only if board is empty
   await checkServer();
-  currentDept = DEPARTMENTS[0];
-  document.getElementById('board-title').textContent = currentDept;
+  currentDept = 'Minhas';
+  document.getElementById('board-title').textContent = 'Minhas atribuições';
   render();
   setInterval(pollState, 15000);
   setInterval(checkServer, 60000);
