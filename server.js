@@ -276,11 +276,20 @@ app.get('/api/me', (req, res) => {
   if (!req.session.user) return res.json({ user: null });
   const { email, name, picture } = req.session.user;
   const member = getFullTeam().find(m => m.email === email);
+  const area = member?.area || '';
+  const meHeads = headDepts(member);
+  // Quem é o chefe do setor do usuário (se ele mesmo não for o chefe)
+  let chefe = '';
+  if (area && !meHeads.includes(area)) {
+    const head = getFullTeam().find(m => headDepts(m).includes(area));
+    if (head && head.email !== email) chefe = head.name;
+  }
   res.json({ user: {
     email, name, picture,
-    area:   member?.area || '',
+    area,
     role:   member?.role || '',
-    headOf: headDepts(member),                          // setores que ele chefia (array)
+    headOf: meHeads,                                    // setores que ele chefia (array)
+    chefe,                                              // nome do chefe do setor dele ('' se for chefe/sem setor)
     isAdmin: ADMIN_EMAILS.includes(email),
     isFinal: (email || '').toLowerCase() === FINAL_APPROVER, // aprovador final (COO)
   }});

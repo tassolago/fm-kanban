@@ -1409,10 +1409,20 @@ fetch('/api/me').then(r => r.json()).then(({ user }) => {
   if (!user) return;
   currentUser = user; // FIX #1: store for use in comments
   const el = document.getElementById('user-info');
+  const ehChefe = Array.isArray(user.headOf) && user.headOf.length > 0;
+  // Linha de baixo: Cargo · Setor · Chefe (chefe só p/ subordinados)
+  const partes = [];
+  if (user.role) partes.push(escHtml(user.role));
+  if (user.area) partes.push(escHtml(user.area));
+  if (!ehChefe && !user.isAdmin && !user.isFinal && user.chefe) partes.push('Chefe: ' + escHtml(user.chefe));
+  const subline = partes.join(' · ');
   el.innerHTML = `
-    ${user.picture?`<img src="${user.picture}" style="width:26px;height:26px;border-radius:50%;object-fit:cover;" referrerpolicy="no-referrer"/>`:''}
-    <span style="font-size:12px;color:#888;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${user.name||user.email}</span>
-    <a href="/logout" style="font-size:11px;color:#555;text-decoration:none;padding:3px 8px;border:1px solid #333;border-radius:4px;white-space:nowrap;">Sair</a>`;
+    ${user.picture?`<img src="${user.picture}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0;" referrerpolicy="no-referrer"/>`:''}
+    <div style="display:flex;flex-direction:column;line-height:1.25;min-width:0;max-width:230px;">
+      <span style="font-size:13px;color:#e0e0e0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(user.name||user.email)}</span>
+      ${subline?`<span style="font-size:11px;color:#777;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${subline}</span>`:''}
+    </div>
+    <a href="/logout" style="font-size:11px;color:#555;text-decoration:none;padding:3px 8px;border:1px solid #333;border-radius:4px;white-space:nowrap;flex-shrink:0;">Sair</a>`;
   if (ADMIN_EMAILS_CLIENT.includes(user.email)) {
     document.getElementById('admin-link').innerHTML =
       `<a href="/admin" style="font-size:11px;color:#FF9800;text-decoration:none;padding:3px 8px;border:1px solid #FF980050;border-radius:4px;white-space:nowrap;">⚙ Admin</a>`;
