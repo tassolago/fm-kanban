@@ -1530,7 +1530,8 @@ async function submitDateReq() {
 // ── Sininho / painel ────────────────────────────────────────────────────────────
 async function refreshNotifCount() {
   if (!currentUser) return;
-  const canApprove = currentUser.headOf || currentUser.isFinal || currentUser.isAdmin;
+  const headsCount = Array.isArray(currentUser.headOf) ? currentUser.headOf.length : (currentUser.headOf ? 1 : 0);
+  const canApprove = headsCount > 0 || currentUser.isFinal || currentUser.isAdmin;
   const btn = document.getElementById('notif-btn');
   if (!canApprove) { btn.style.display = 'none'; return; }
   btn.style.display = 'inline-flex';

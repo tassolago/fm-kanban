@@ -149,6 +149,17 @@ function loadDateRequests() {
 function saveDateRequests(reqs) {
   try { fs.writeFileSync(dateReqFile, JSON.stringify(reqs, null, 2), 'utf-8'); } catch {}
 }
+// Normaliza headOf (legado string OU array) → array de setores
+function headDepts(member) {
+  if (!member) return [];
+  const h = member.headOf;
+  if (Array.isArray(h)) return h.filter(Boolean);
+  return h ? [h] : [];
+}
+function isHeadOf(member, dept) {
+  return headDepts(member).includes(dept);
+}
+
 // Contexto/papel do usuário no fluxo de aprovação
 function userContext(email) {
   const e = (email || '').toLowerCase();
@@ -157,7 +168,7 @@ function userContext(email) {
     email:   e,
     name:    m?.name || e,
     area:    m?.area || '',
-    headOf:  m?.headOf || '',                 // setor que chefia ('' = não é chefe)
+    headDepts: headDepts(m),                  // setores que chefia (array)
     isFinal: e === FINAL_APPROVER,            // aprovador final (COO)
     isAdmin: ADMIN_EMAILS.map(a=>a.toLowerCase()).includes(e),
   };
@@ -269,7 +280,7 @@ app.get('/api/me', (req, res) => {
     email, name, picture,
     area:   member?.area || '',
     role:   member?.role || '',
-    headOf: member?.headOf || '',                       // setor que ele chefia ('' = subordinado)
+    headOf: headDepts(member),                          // setores que ele chefia (array)
     isAdmin: ADMIN_EMAILS.includes(email),
     isFinal: (email || '').toLowerCase() === FINAL_APPROVER, // aprovador final (COO)
   }});
@@ -641,7 +652,7 @@ app.post('/api/notify', async (req, res) => {
       const full = getFullTeam();
       const ccSet = new Set();
       ADMIN_EMAILS.forEach(e => ccSet.add(e));
-      const head = full.find(m => m.headOf === card.dept && m.email);
+      const head = full.find(m => isHeadOf(m, card.dept) && m.email);
       if (head) ccSet.add(head.email);
       ccSet.delete(assigneeMember.email); // não duplica o destinatário
       const ccList = [...ccSet];
@@ -996,6 +1007,7 @@ async function load() {
   }
   tbody.innerHTML = team.map((m, i) => {
     const isAdmin = ${JSON.stringify(ADMIN_EMAILS)}.includes(m.email);
+    const headList = Array.isArray(m.headOf) ? m.headOf.filter(Boolean) : (m.headOf ? [m.headOf] : []);
     const joined = m.joinedAt ? new Date(m.joinedAt).toLocaleDateString('pt-BR') : '—';
     const avatar = m.picture
       ? \`<img src="\${m.picture}" class="avatar" referrerpolicy="no-referrer"/>\`
@@ -1019,11 +1031,16 @@ async function load() {
       <td>
         <input type="text" id="role-\${i}" value="\${m.role || ''}" placeholder="Ex: Analista" style="width:160px;" oninput="markDirty(\${i})"/>
       </td>
-      <td>
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
-          <input type="checkbox" id="head-\${i}" \${m.headOf && m.headOf === m.area ? 'checked' : ''} onchange="markDirty(\${i})" style="width:16px;height:16px;accent-color:#FF9800;cursor:pointer;"/>
-          <span id="head-label-\${i}" style="color:\${m.headOf && m.headOf === m.area ? '#FF9800' : '#555'};font-weight:\${m.headOf && m.headOf === m.area ? '600' : '400'};">\${m.headOf && m.headOf === m.area ? 'Chefe de '+m.area : 'Marcar como chefe'}</span>
-        </label>
+      <td style="position:relative;">
+        <button type="button" id="head-btn-\${i}" onclick="toggleHeadMenu(\${i})" style="display:flex;align-items:center;gap:6px;background:var(--surface2,#1e1e1e);border:1px solid #333;border-radius:6px;color:#aaa;font-size:12px;padding:6px 10px;cursor:pointer;min-width:140px;justify-content:space-between;">
+          <span id="head-btn-label-\${i}">\${headList.length ? 'Chefe de '+headList.join(', ') : 'Não é chefe'}</span>
+          <span style="color:#555;">▾</span>
+        </button>
+        <div id="head-menu-\${i}" style="display:none;position:absolute;z-index:20;top:100%;left:0;margin-top:4px;background:#1e1e1e;border:1px solid #333;border-radius:8px;padding:8px;min-width:180px;box-shadow:0 8px 24px rgba(0,0,0,.6);max-height:280px;overflow-y:auto;">
+          \${DEPTS.map(d => \`<label style="display:flex;align-items:center;gap:8px;padding:5px 6px;cursor:pointer;font-size:13px;color:#ccc;border-radius:4px;">
+            <input type="checkbox" class="head-chk-\${i}" value="\${d}" \${headList.includes(d) ? 'checked' : ''} onchange="onHeadChange(\${i})" style="width:15px;height:15px;accent-color:#FF9800;cursor:pointer;"/>\${d}
+          </label>\`).join('')}
+        </div>
       </td>
       <td class="joined">\${joined}</td>
       <td>
@@ -1039,13 +1056,40 @@ function markDirty(i) {
   document.getElementById('saved-' + i).style.opacity = 0;
 }
 
+function toggleHeadMenu(i) {
+  const menu = document.getElementById('head-menu-' + i);
+  const open = menu.style.display === 'block';
+  // fecha todos
+  document.querySelectorAll('[id^="head-menu-"]').forEach(m => m.style.display = 'none');
+  menu.style.display = open ? 'none' : 'block';
+}
+
+function headValues(i) {
+  return Array.from(document.querySelectorAll('.head-chk-' + i + ':checked')).map(c => c.value);
+}
+
+function onHeadChange(i) {
+  const heads = headValues(i);
+  const lbl = document.getElementById('head-btn-label-' + i);
+  if (lbl) {
+    lbl.textContent = heads.length ? 'Chefe de ' + heads.join(', ') : 'Não é chefe';
+    lbl.style.color = heads.length ? '#FF9800' : '#aaa';
+  }
+  markDirty(i);
+}
+
+// fecha menus ao clicar fora
+document.addEventListener('click', (e) => {
+  if (!e.target.closest || (!e.target.closest('[id^="head-menu-"]') && !e.target.closest('[id^="head-btn-"]'))) {
+    document.querySelectorAll('[id^="head-menu-"]').forEach(m => m.style.display = 'none');
+  }
+});
+
 async function save(i, email) {
   const area = document.getElementById('area-' + i).value;
   const role = document.getElementById('role-' + i).value.trim();
-  const isHead = document.getElementById('head-' + i).checked;
-  const headOf = isHead ? area : '';
+  const headOf = headValues(i); // array de setores que a pessoa chefia
   const btn  = document.getElementById('save-' + i);
-  if (isHead && !area) { alert('Defina o setor antes de marcar como chefe.'); return; }
   btn.textContent = '…';
   btn.disabled = true;
   await fetch('/api/admin/team/' + encodeURIComponent(email), {
@@ -1053,15 +1097,10 @@ async function save(i, email) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ area, role, headOf }),
   });
-  const lbl = document.getElementById('head-label-' + i);
-  if (lbl) {
-    lbl.textContent = isHead ? 'Chefe de ' + area : 'Marcar como chefe';
-    lbl.style.color = isHead ? '#FF9800' : '#555';
-    lbl.style.fontWeight = isHead ? '600' : '400';
-  }
   btn.textContent = 'Salvar';
   btn.disabled = false;
   btn.classList.remove('visible');
+  document.getElementById('head-menu-' + i).style.display = 'none';
   const saved = document.getElementById('saved-' + i);
   saved.style.opacity = 1;
   setTimeout(() => { saved.style.opacity = 0; }, 2000);
@@ -1168,17 +1207,23 @@ app.post('/api/admin/team/:email', requireAdmin, (req, res) => {
   }
 
   if (headOf !== undefined) {
-    member.headOf = headOf || '';
-    // Garante UM ÚNICO chefe por setor: remove o headOf de qualquer outro do mesmo setor
-    if (headOf) {
+    // headOf agora é uma LISTA de setores que a pessoa chefia
+    const heads = Array.isArray(headOf) ? headOf.filter(Boolean) : (headOf ? [headOf] : []);
+    member.headOf = heads;
+    // Garante UM ÚNICO chefe por setor: remove esses setores do headOf de qualquer outro
+    if (heads.length) {
       members.forEach(m => {
-        if (m.email !== email && m.headOf === headOf) m.headOf = '';
+        if (m.email !== email) {
+          const mh = Array.isArray(m.headOf) ? m.headOf : (m.headOf ? [m.headOf] : []);
+          const filtered = mh.filter(d => !heads.includes(d));
+          if (filtered.length !== mh.length) m.headOf = filtered;
+        }
       });
     }
   }
 
   saveDynamicTeam(members);
-  console.log(`[${timestamp()}] ✏️  Admin update: ${email} → setor=${area} cargo=${role} chefe=${member.headOf || '—'}`);
+  console.log(`[${timestamp()}] ✏️  Admin update: ${email} → setor=${area} cargo=${role} chefe=${(member.headOf||[]).join(',') || '—'}`);
   res.json({ ok: true });
 });
 
@@ -1189,7 +1234,7 @@ async function safeSendMail(opts) {
   catch (e) { console.error(`[${timestamp()}] ❌ email:`, e.message); }
 }
 function deptHeadEmail(dept) {
-  const h = getFullTeam().find(m => m.headOf === dept && m.email);
+  const h = getFullTeam().find(m => isHeadOf(m, dept) && m.email);
   return h ? h.email : null;
 }
 
@@ -1204,7 +1249,7 @@ app.post('/api/date-requests', requireAuth, async (req, res) => {
   if (!card) return res.status(404).json({ ok: false, error: 'Card não encontrado' });
 
   // Chefe do próprio setor, COO ou admin pulam a etapa do chefe → vão direto pra aprovação final
-  const ehChefeDoCard = u.headOf && u.headOf === card.dept;
+  const ehChefeDoCard = u.headDepts.includes(card.dept);
   const initialStatus = (ehChefeDoCard || u.isFinal || u.isAdmin) ? 'pending_final' : 'pending_head';
 
   const reqObj = {
@@ -1244,14 +1289,14 @@ app.get('/api/date-requests', requireAuth, (req, res) => {
   const u = userContext(req.session.user.email);
   const reqs = loadDateRequests().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   const toApprove = [];
-  if (u.headOf) toApprove.push(...reqs.filter(r => r.status === 'pending_head' && r.cardDept === u.headOf));
+  if (u.headDepts.length) toApprove.push(...reqs.filter(r => r.status === "pending_head" && u.headDepts.includes(r.cardDept)));
   if (u.isFinal || u.isAdmin) toApprove.push(...reqs.filter(r => r.status === 'pending_final'));
   const mine = reqs.filter(r => r.requestedByEmail === u.email);
   const history = (u.isAdmin || u.isFinal)
     ? reqs.filter(r => r.status === 'approved' || r.status === 'rejected').slice(0, 20)
     : [];
   res.json({ ok: true, toApprove, mine, history,
-    role: { headOf: u.headOf, isFinal: u.isFinal, isAdmin: u.isAdmin } });
+    role: { headOf: u.headDepts, isFinal: u.isFinal, isAdmin: u.isAdmin } });
 });
 
 // Contador pro sininho
@@ -1259,7 +1304,7 @@ app.get('/api/date-requests/count', requireAuth, (req, res) => {
   const u = userContext(req.session.user.email);
   const reqs = loadDateRequests();
   let count = 0;
-  if (u.headOf) count += reqs.filter(r => r.status === 'pending_head' && r.cardDept === u.headOf).length;
+  if (u.headDepts.length) count += reqs.filter(r => r.status === "pending_head" && u.headDepts.includes(r.cardDept)).length;
   if (u.isFinal || u.isAdmin) count += reqs.filter(r => r.status === 'pending_final').length;
   res.json({ ok: true, count });
 });
@@ -1275,7 +1320,7 @@ app.post('/api/date-requests/:id/approve', requireAuth, async (req, res) => {
   const card = (state.cards || []).find(c => c.id === r.cardId) || { title: r.cardTitle, dept: r.cardDept };
 
   if (r.status === 'pending_head') {
-    if (!(u.headOf === r.cardDept || u.isAdmin)) return res.status(403).json({ ok: false, error: 'Só o chefe do setor pode aprovar esta etapa' });
+    if (!(u.headDepts.includes(r.cardDept) || u.isAdmin)) return res.status(403).json({ ok: false, error: 'Só o chefe do setor pode aprovar esta etapa' });
     r.status = 'pending_final'; r.headApprovedAt = new Date().toISOString(); r.headApprovedBy = u.name;
     saveDateRequests(reqs);
     await safeSendMail({ to: FINAL_APPROVER, cc: ADMIN_EMAILS.join(', '),
@@ -1312,7 +1357,7 @@ app.post('/api/date-requests/:id/reject', requireAuth, async (req, res) => {
   if (!r) return res.status(404).json({ ok: false, error: 'Solicitação não encontrada' });
   if (r.status !== 'pending_head' && r.status !== 'pending_final') return res.status(400).json({ ok: false, error: 'Solicitação já resolvida' });
 
-  const podeRejeitar = (r.status === 'pending_head' && (u.headOf === r.cardDept || u.isAdmin))
+  const podeRejeitar = (r.status === "pending_head" && (u.headDepts.includes(r.cardDept) || u.isAdmin))
                     || (r.status === 'pending_final' && (u.isFinal || u.isAdmin));
   if (!podeRejeitar) return res.status(403).json({ ok: false, error: 'Sem permissão para rejeitar' });
 
@@ -1373,7 +1418,7 @@ async function scanDeadlines() {
     const recipients = new Set();
     const assigneeMember = full.find(m => m.name === card.assignee && m.email);
     if (assigneeMember) recipients.add(assigneeMember.email);
-    const head = full.find(m => m.headOf === card.dept && m.email);
+    const head = full.find(m => isHeadOf(m, card.dept) && m.email);
     if (head) recipients.add(head.email);
     ADMIN_EMAILS.forEach(e => recipients.add(e));
     if (!recipients.size) continue;
