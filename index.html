@@ -593,12 +593,22 @@ async function saveStateToServer() {
     const res = await fetch(`${API_BASE}/state`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ state }),
+      // baseUpdatedAt = versão do servidor em que este cliente baseou as edições
+      body: JSON.stringify({ state, baseUpdatedAt: lastUpdatedAt }),
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) throw new Error('server error');
     const data = await res.json();
     lastUpdatedAt = data.updated_at;
+    // Adota o estado MESCLADO do servidor (inclui cards criados por outros) — sem perder nada
+    if (data.state) {
+      const modalOpen = document.getElementById('modal-overlay')?.classList.contains('open');
+      state = data.state;
+      if (!state.deptColumns) state.deptColumns = {};
+      const maxId = (state.cards || []).reduce((m,c) => Math.max(m,c.id||0), 0);
+      if (state.nextId <= maxId) state.nextId = maxId + 1;
+      if (!modalOpen) render(); // não re-renderiza por baixo de um modal aberto
+    }
     serverOnline = true;
     setSyncStatus('synced');
   } catch {

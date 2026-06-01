@@ -591,15 +591,43 @@ app.get('/api/state', (req, res) => {
 
 // Save kanban state
 app.post('/api/state', (req, res) => {
-  const { state } = req.body;
+  const { state, baseUpdatedAt } = req.body;
   if (!state) return res.status(400).json({ ok: false, error: 'Missing state' });
 
+  const prev = readState().state || { cards: [] };
+  const baseTs = Number(baseUpdatedAt) || 0; // versão do servidor que o cliente tinha ao editar
+
+  // ── MERGE anti-perda (resolve concorrência multiusuário) ──────────────────────
+  // Preserva cards criados por OUTRA pessoa depois do snapshot deste cliente,
+  // evitando que um "salvar com estado antigo" apague o trabalho recém-criado por outro.
+  const incoming = Array.isArray(state.cards) ? state.cards : [];
+  const incomingIds = new Set(incoming.map(c => c.id));
+  const mergedCards = [...incoming];
+  let preserved = 0;
+  for (const pc of (prev.cards || [])) {
+    if (!incomingIds.has(pc.id)) {
+      const created = pc.createdAt ? new Date(pc.createdAt).getTime() : 0;
+      // Se foi criado depois do snapshot do cliente → o cliente nunca viu, não pode "deletar" → preserva.
+      // Se foi criado antes → o cliente realmente excluiu → respeita a exclusão.
+      if (created > baseTs) { mergedCards.push(pc); preserved++; }
+    }
+  }
+  state.cards = mergedCards;
+  if (preserved) console.log(`[${timestamp()}] 🔀 merge: ${preserved} card(s) de outros preservado(s)`);
+
+  // Merge do feed de atividades (união por id, mantém os 120 mais recentes)
+  if ((prev.activity && prev.activity.length) || (state.activity && state.activity.length)) {
+    const seen = new Set();
+    const allAct = [...(state.activity || []), ...(prev.activity || [])];
+    const mergedAct = [];
+    for (const a of allAct) { if (a && !seen.has(a.id)) { seen.add(a.id); mergedAct.push(a); } }
+    mergedAct.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+    state.activity = mergedAct.slice(0, 120);
+  }
+
   // Proteção de prazo: só COO e admin alteram um prazo já definido.
-  // Para os demais, qualquer mudança em dueDate existente é revertida (anti-burla da trava da UI).
-  // Definir o 1º prazo de um card sem data continua permitido.
   const u = userContext(req.session?.user?.email || '');
   if (!(u.isFinal || u.isAdmin)) {
-    const prev = readState().state;
     const prevById = new Map((prev.cards || []).map(c => [c.id, c]));
     let reverted = 0;
     (state.cards || []).forEach(c => {
@@ -613,7 +641,8 @@ app.post('/api/state', (req, res) => {
   }
 
   const updated_at = writeState(state);
-  res.json({ ok: true, updated_at });
+  // Devolve o estado mesclado para o cliente adotar imediatamente
+  res.json({ ok: true, updated_at, state });
 });
 
 // Team list (no credentials exposed)
