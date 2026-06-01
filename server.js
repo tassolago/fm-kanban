@@ -203,7 +203,7 @@ app.use(session({
 }));
 
 // ── Auth middleware ───────────────────────────────────────────────────────────
-const PUBLIC_PATHS = ['/login', '/auth/login', '/auth/callback', '/health'];
+const PUBLIC_PATHS = ['/login', '/auth/login', '/auth/callback', '/health', '/api/admin/import-cards'];
 
 function requireAuth(req, res, next) {
   if (PUBLIC_PATHS.some(p => req.path.startsWith(p))) return next();
