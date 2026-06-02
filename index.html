@@ -528,12 +528,28 @@ let state = { cards:[], nextId:1, deptColumns:{}, activity:[] };
 let currentDept   = DEPARTMENTS[0];
 let currentUser   = null;
 let filterAssignee = '';
+let filterColumn = '';
 let searchQuery = '';
 // true se o card bate com a busca por título (e descrição)
 function matchesSearch(c) {
   const q = searchQuery.trim().toLowerCase();
   if (!q) return true;
   return (c.title||'').toLowerCase().includes(q) || (c.description||'').toLowerCase().includes(q);
+}
+// rótulo da coluna do card (considerando colunas customizadas do setor)
+function cardColumnLabel(c) {
+  const cols = getColumnsForDept(c.dept);
+  return cols.find(col => col.id === c.column)?.label || c.column;
+}
+function matchesColumn(c) {
+  return !filterColumn || cardColumnLabel(c) === filterColumn;
+}
+// lista única de rótulos de coluna (default + customizados por setor)
+function getAllColumnLabels() {
+  const set = new Set();
+  DEFAULT_COLUMNS.forEach(c => set.add(c.label));
+  Object.values(state.deptColumns || {}).forEach(cols => (cols||[]).forEach(c => set.add(c.label)));
+  return [...set];
 }
 let teamMembers   = [];
 let serverOnline  = false;
@@ -771,10 +787,15 @@ function renderTabs() {
         style="background:transparent;border:none;color:var(--text);font-size:12px;padding:5px 2px;outline:none;width:140px;"/>
       ${searchQuery?`<button onclick="searchQuery='';renderTabs();renderBoard();setTimeout(()=>document.getElementById('card-search')?.focus(),0)" style="background:none;border:none;color:var(--text4);cursor:pointer;font-size:14px;line-height:1;padding:0 2px;">×</button>`:''}
     </div>
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text4)" stroke-width="2" style="margin-left:4px;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text4)" stroke-width="2" style="margin-left:4px;" title="Responsável"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
     <select class="filter-select" id="filter-assignee" onchange="filterAssignee=this.value;render()">
       <option value="">Todos</option>
       ${teamMembers.map(m=>`<option value="${escHtml(m.name)}"${m.name===filterAssignee?' selected':''}>${escHtml(m.name)}</option>`).join('')}
+    </select>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text4)" stroke-width="2" style="margin-left:4px;" title="Coluna"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="11" rx="1"/></svg>
+    <select class="filter-select" id="filter-column" onchange="filterColumn=this.value;render()">
+      <option value="">Todas as colunas</option>
+      ${getAllColumnLabels().map(l=>`<option value="${escHtml(l)}"${l===filterColumn?' selected':''}>${escHtml(l)}</option>`).join('')}
     </select>
   </div>`;
 }
@@ -800,7 +821,7 @@ function renderBoard() {
   board.innerHTML = cols.map(col => {
     let cards = state.cards.filter(c => c.dept===currentDept && c.column===col.id);
     if (filterAssignee) cards = cards.filter(c => c.assignee===filterAssignee);
-    cards = cards.filter(matchesSearch);
+    cards = cards.filter(matchesSearch).filter(matchesColumn);
     return `
     <div class="column" id="col-${col.id}">
       <div class="col-header">
@@ -841,7 +862,7 @@ function renderMyView(board) {
     return;
   }
   const today = new Date(); today.setHours(0,0,0,0);
-  const mine = state.cards.filter(c => c.assignee === me && matchesSearch(c));
+  const mine = state.cards.filter(c => c.assignee === me && matchesSearch(c) && matchesColumn(c));
 
   const isDone = c => {
     const cols = getColumnsForDept(c.dept);
@@ -900,7 +921,7 @@ function renderMyView(board) {
 // ── Geral view ─────────────────────────────────────────────────────────────────
 function renderGeralView(board) {
   const today = new Date(); today.setHours(0,0,0,0);
-  const filteredCards = c => (!filterAssignee || c.assignee===filterAssignee) && matchesSearch(c);
+  const filteredCards = c => (!filterAssignee || c.assignee===filterAssignee) && matchesSearch(c) && matchesColumn(c);
   const activeDepts = DEPARTMENTS.filter(d => state.cards.filter(c => c.dept===d && filteredCards(c)).length > 0);
 
   const allCards = state.cards.filter(filteredCards);
