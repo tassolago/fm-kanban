@@ -136,6 +136,8 @@ select option{background:var(--surface2)}
 .card.dragging{opacity:.4;transform:scale(.96)}
 .card.overdue{border-left:3px solid var(--red);}
 .overdue-label{font-size:10px;font-weight:600;color:var(--red);display:block;margin-bottom:5px;letter-spacing:.3px;}
+.card.noprazo{border-left:3px solid var(--yellow);}
+.noprazo-label{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:#000;background:var(--yellow);padding:2px 7px;border-radius:10px;margin-bottom:6px;letter-spacing:.2px;}
 
 .card-priority{
   display:inline-block;font-size:10px;font-weight:600;
@@ -924,6 +926,7 @@ function renderGeralView(board) {
       return n ? `<div class="geral-stat"><span>${n}</span><div>${d}</div></div>` : '';
     }).join('')}
     ${overdueCards.length ? `<div class="geral-stat" style="border-color:rgba(239,68,68,.3)"><span style="color:var(--red)">⚠ ${overdueCards.length}</span><div style="color:rgba(239,68,68,.6)">Atrasados</div></div>` : ''}
+    ${(() => { const n = allCards.filter(c => !c.dueDate).length; return n ? `<div class="geral-stat" style="border-color:rgba(255,255,0,.3)"><span style="color:var(--yellow)">⚠ ${n}</span><div style="color:rgba(255,255,0,.55)">Sem prazo</div></div>` : ''; })()}
   </div>
   ${activeDepts.map(dept => {
     const cards = state.cards.filter(c => c.dept===dept && filteredCards(c));
@@ -950,13 +953,15 @@ function renderGeralCard(c, columns, today) {
   const pClass = c.priority ? `p-${c.priority}` : '';
   const initials = c.assignee ? c.assignee.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase() : '';
   const dueStr = c.dueDate ? new Date(c.dueDate+'T00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'short'}) : '';
+  const semPrazo = !c.dueDate;
   return `
-  <div class="geral-card${isOverdue?' overdue':''}" onclick="openModal(${c.id})" style="border-left-color:${isOverdue?'var(--red)':colColor}">
+  <div class="geral-card${isOverdue?' overdue':''}" onclick="openModal(${c.id})" style="border-left-color:${isOverdue?'var(--red)':(semPrazo?'var(--yellow)':colColor)}">
     ${c.priority?`<span class="card-priority ${pClass}" style="margin-bottom:6px;display:inline-block;">${c.priority}</span>`:''}
     <div class="geral-card-title">${escHtml(c.title||'Sem título')}</div>
     <div class="geral-card-meta">
       <span class="geral-status-badge" style="background:${colColor}20;color:${colColor};border:1px solid ${colColor}40;">${col?.label||'—'}</span>
       ${isOverdue?`<span style="font-size:10px;color:var(--red);font-weight:600;">⚠ Atrasado</span>`:''}
+      ${semPrazo?`<span class="noprazo-label" style="margin-bottom:0;">⚠ Definir prazo</span>`:''}
       ${dueStr&&!isOverdue?`<span class="card-tag"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${dueStr}</span>`:''}
       ${c.assignee?`<div class="card-assignee-avatar" title="${escHtml(c.assignee)}" style="margin-left:auto;width:20px;height:20px;font-size:8px;">${initials}</div>`:''}
     </div>
@@ -971,14 +976,16 @@ function renderCard(c) {
   const pClass = c.priority ? `p-${c.priority}` : '';
   const initials = c.assignee ? c.assignee.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase() : '';
   const dueStr = c.dueDate ? new Date(c.dueDate+'T00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'short'}) : '';
+  const semPrazo = !c.dueDate;
   const commentCount = (c.comments||[]).length;
   return `
-  <div class="card${isOverdue?' overdue':''}" id="card-${c.id}"
+  <div class="card${isOverdue?' overdue':''}${semPrazo?' noprazo':''}" id="card-${c.id}"
        draggable="true"
        ondragstart="onDragStart(event,${c.id},'${c.column}')"
        ondragend="onDragEnd(event)"
        onclick="openModal(${c.id})">
     ${isOverdue?'<span class="overdue-label">⚠ Atrasado</span>':''}
+    ${semPrazo?'<span class="noprazo-label">⚠ Definir prazo</span>':''}
     ${c.priority?`<span class="card-priority ${pClass}">${c.priority}</span>`:''}
     <div class="card-title">${escHtml(c.title||'Sem título')}</div>
     ${c.description?`<div class="card-desc">${escHtml(c.description)}</div>`:''}
