@@ -60,11 +60,12 @@ select option{background:var(--surface2)}
 
 /* ── Dept Tabs ─────────────────────────────────────────────────────────────── */
 #tabs-wrap{
-  display:flex;align-items:center;gap:4px;padding:0 16px;
+  display:flex;align-items:center;gap:8px;padding:0 16px;
   background:var(--surface);border-bottom:1px solid var(--border);
-  flex-shrink:0;overflow-x:auto;height:48px;min-height:48px;
+  flex-shrink:0;overflow:hidden;height:48px;min-height:48px;
 }
-#tabs-wrap::-webkit-scrollbar{height:3px}
+.tabs-scroll{display:flex;align-items:center;gap:4px;flex:1;min-width:0;overflow-x:auto;height:100%;}
+.tabs-scroll::-webkit-scrollbar{height:3px}
 .tab{
   white-space:nowrap;padding:6px 14px;border-radius:var(--radius-sm);
   font-size:13px;font-weight:500;color:var(--text3);background:transparent;
@@ -72,7 +73,7 @@ select option{background:var(--surface2)}
 }
 .tab:hover{color:var(--text2);background:var(--surface2)}
 .tab.active{color:var(--orange);background:var(--orange-glow);font-weight:600}
-.filter-wrap{margin-left:auto;display:flex;align-items:center;gap:7px;flex-shrink:0;padding-left:12px;border-left:1px solid var(--border);}
+.filter-wrap{display:flex;align-items:center;gap:7px;flex-shrink:0;padding-left:12px;border-left:1px solid var(--border);}
 .filter-select{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);color:var(--text2);font-size:12px;padding:4px 26px 4px 8px;cursor:pointer;outline:none;max-width:150px;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='none' viewBox='0 0 24 24'%3E%3Cpath stroke='%23666' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 7px center;}
 .filter-select:focus{border-color:var(--orange)}
 
@@ -776,9 +777,9 @@ function renderTabs() {
   const wrap = document.getElementById('tabs-wrap');
   const allTabs = ['Minhas', 'Geral', ...DEPARTMENTS];
   const label = d => d==='Geral' ? '🌐 Geral' : (d==='Minhas' ? '👤 Minhas' : d);
-  wrap.innerHTML = allTabs.map(d =>
+  wrap.innerHTML = `<div class="tabs-scroll">` + allTabs.map(d =>
     `<button class="tab ${d===currentDept?'active':''}" onclick="switchDept('${d}')">${label(d)}</button>`
-  ).join('') + `
+  ).join('') + `</div>
   <div class="filter-wrap">
     <div style="display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:0 8px;">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text4)" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
