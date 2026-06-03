@@ -371,7 +371,7 @@ select option{background:var(--surface2)}
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 10l4.553-2.069A1 1 0 0121 8.862v6.276a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/></svg>
     Reuniões
   </button>
-  <button class="btn-add-card" id="btn-novo-card" onclick="openModal(null, (currentDept==='Geral'||currentDept==='Minhas')?DEPARTMENTS[0]:currentDept)">
+  <button class="btn-add-card" id="btn-novo-card" onclick="openModal(null, (['Geral','Minhas','Painel'].includes(currentDept))?DEPARTMENTS[0]:currentDept)">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
     Novo Card
   </button>
@@ -472,6 +472,14 @@ select option{background:var(--surface2)}
           <select id="modal-dept-select"></select>
         </div>
       </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Funil</label>
+          <input type="text" id="modal-funnel" list="funnel-list" placeholder="Sem funil (opcional)" autocomplete="off"/>
+          <datalist id="funnel-list"></datalist>
+        </div>
+        <div class="field"></div>
+      </div>
       <div class="field-row single" style="margin-top:4px">
         <div class="field">
           <label>Descrição</label>
@@ -484,6 +492,9 @@ select option{background:var(--surface2)}
         <textarea id="comment-input" placeholder="Adicionar comentário…"></textarea>
         <button class="btn-comment" onclick="addComment()">Enviar</button>
       </div>
+
+      <div class="section-header">Histórico</div>
+      <div id="history-list" style="display:flex;flex-direction:column;gap:6px;"></div>
     </div>
     <div class="modal-footer">
       <button class="btn-delete" id="btn-delete" onclick="deleteCard()">Excluir card</button>
@@ -505,31 +516,39 @@ const DEPARTMENTS = [
   'Tech','Operações','Infra','Jurídico','Imprensa'
 ];
 
-const DEFAULT_COLUMNS = [
-  { id:'backlog',   label:'Backlog',      color:'#666'    },
-  { id:'andamento', label:'Em andamento', color:'#FF9800' },
-  { id:'revisao',   label:'Revisão',      color:'#3b82f6' },
-  { id:'concluido', label:'Concluído',    color:'#22c55e' },
-];
-
-const MARKETING_COLUMNS = [
+// Etapas PADRÃO únicas para todos os setores
+const STANDARD_COLUMNS = [
   { id:'briefing',  label:'Briefing',  color:'#a855f7' },
   { id:'criacao',   label:'Criação',   color:'#3b82f6' },
   { id:'revisao',   label:'Revisão',   color:'#FF9800' },
   { id:'aprovacao', label:'Aprovação', color:'#f59e0b' },
   { id:'publicado', label:'Publicado', color:'#22c55e' },
-  { id:'live',      label:'Live 🔴',  color:'#ef4444' },
 ];
+const DEFAULT_COLUMNS = STANDARD_COLUMNS; // alias p/ compatibilidade
 
-const COLUMN_COLORS = ['#666','#FF9800','#3b82f6','#22c55e','#a855f7','#ef4444','#f59e0b','#06b6d4'];
+// Migração de ids antigos → padrão novo
+const COLUMN_MIGRATION = {
+  backlog:'briefing', andamento:'criacao', revisao:'revisao', concluido:'publicado',
+  live:'publicado', briefing:'briefing', criacao:'criacao', aprovacao:'aprovacao', publicado:'publicado',
+};
+function normalizeColumns(st) {
+  if (!st || !Array.isArray(st.cards)) return st;
+  const valid = new Set(STANDARD_COLUMNS.map(c => c.id));
+  st.cards.forEach(c => {
+    if (!valid.has(c.column)) c.column = COLUMN_MIGRATION[c.column] || 'briefing';
+  });
+  st.deptColumns = {}; // não há mais colunas customizadas por setor
+  return st;
+}
 const API_BASE = '/api';
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let state = { cards:[], nextId:1, deptColumns:{}, activity:[] };
+let state = { cards:[], nextId:1, deptColumns:{}, activity:[], funnels:[] };
 let currentDept   = DEPARTMENTS[0];
 let currentUser   = null;
 let filterAssignee = '';
 let filterColumn = '';
+let filterFunnel = '';
 let searchQuery = '';
 // true se o card bate com a busca por título (e descrição)
 function matchesSearch(c) {
@@ -545,12 +564,19 @@ function cardColumnLabel(c) {
 function matchesColumn(c) {
   return !filterColumn || cardColumnLabel(c) === filterColumn;
 }
-// lista única de rótulos de coluna (default + customizados por setor)
+function matchesFunnel(c) {
+  if (!filterFunnel) return true;
+  if (filterFunnel === '__none__') return !c.funnel;
+  return c.funnel === filterFunnel;
+}
+function getAllFunnels() {
+  const set = new Set(state.funnels || []);
+  (state.cards||[]).forEach(c => { if (c.funnel) set.add(c.funnel); });
+  return [...set].sort();
+}
+// lista de rótulos de coluna (padrão único)
 function getAllColumnLabels() {
-  const set = new Set();
-  DEFAULT_COLUMNS.forEach(c => set.add(c.label));
-  Object.values(state.deptColumns || {}).forEach(cols => (cols||[]).forEach(c => set.add(c.label)));
-  return [...set];
+  return STANDARD_COLUMNS.map(c => c.label);
 }
 let teamMembers   = [];
 let serverOnline  = false;
@@ -563,18 +589,9 @@ let saveDebounceTimer = null;
 let meetExtractedData = null;
 
 // ── Column helpers ─────────────────────────────────────────────────────────────
-function getColumnsForDept(dept) {
-  if (!dept || dept === 'Geral') return DEFAULT_COLUMNS;
-  return (state.deptColumns && state.deptColumns[dept]) || DEFAULT_COLUMNS;
-}
-
-function seedDeptColumns() {
-  if (!state.deptColumns) state.deptColumns = {};
-  if (!state.deptColumns.Marketing) {
-    state.deptColumns.Marketing = MARKETING_COLUMNS.map(c => ({...c}));
-    // NÃO salva aqui — será salvo junto com a próxima ação do usuário
-    // (evita sobrescrever dados reais se o servidor retornou estado vazio por erro transitório)
-  }
+// Colunas padronizadas para TODOS os setores
+function getColumnsForDept() {
+  return STANDARD_COLUMNS;
 }
 
 // ── Sync status ───────────────────────────────────────────────────────────────
@@ -599,15 +616,14 @@ async function loadStateFromServer() {
     const res = await fetch(`${API_BASE}/state`, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) throw new Error('server error');
     const data = await res.json();
-    state = data.state;
-    if (!state.deptColumns) state.deptColumns = {};
+    state = normalizeColumns(data.state);
     lastUpdatedAt = data.updated_at;
     const maxId = state.cards.reduce((m,c) => Math.max(m,c.id||0), 0);
     if (state.nextId <= maxId) state.nextId = maxId + 1;
     serverOnline = true;
     setSyncStatus('synced');
   } catch {
-    state = { cards:[], nextId:1, deptColumns:{}, activity:[] };
+    state = { cards:[], nextId:1, deptColumns:{}, activity:[], funnels:[] };
     serverOnline = false;
     setSyncStatus('offline');
   }
@@ -629,8 +645,7 @@ async function saveStateToServer() {
     // Adota o estado MESCLADO do servidor (inclui cards criados por outros) — sem perder nada
     if (data.state) {
       const modalOpen = document.getElementById('modal-overlay')?.classList.contains('open');
-      state = data.state;
-      if (!state.deptColumns) state.deptColumns = {};
+      state = normalizeColumns(data.state);
       const maxId = (state.cards || []).reduce((m,c) => Math.max(m,c.id||0), 0);
       if (state.nextId <= maxId) state.nextId = maxId + 1;
       if (!modalOpen) render(); // não re-renderiza por baixo de um modal aberto
@@ -656,8 +671,7 @@ async function pollState() {
     if (!res.ok) throw new Error();
     const data = await res.json();
     if (data.updated_at > lastUpdatedAt) {
-      state = data.state;
-      if (!state.deptColumns) state.deptColumns = {};
+      state = normalizeColumns(data.state);
       lastUpdatedAt = data.updated_at;
       const maxId = state.cards.reduce((m,c) => Math.max(m,c.id||0), 0);
       if (state.nextId <= maxId) state.nextId = maxId + 1;
@@ -775,8 +789,8 @@ function render() { renderTabs(); renderBoard(); }
 
 function renderTabs() {
   const wrap = document.getElementById('tabs-wrap');
-  const allTabs = ['Minhas', 'Geral', ...DEPARTMENTS];
-  const label = d => d==='Geral' ? '🌐 Geral' : (d==='Minhas' ? '👤 Minhas' : d);
+  const allTabs = ['Minhas', 'Painel', 'Geral', ...DEPARTMENTS];
+  const label = d => d==='Geral' ? '🌐 Geral' : (d==='Minhas' ? '👤 Minhas' : (d==='Painel' ? '📊 Painel' : d));
   wrap.innerHTML = `<div class="tabs-scroll">` + allTabs.map(d =>
     `<button class="tab ${d===currentDept?'active':''}" onclick="switchDept('${d}')">${label(d)}</button>`
   ).join('') + `</div>
@@ -798,6 +812,12 @@ function renderTabs() {
       <option value="">Todas as colunas</option>
       ${getAllColumnLabels().map(l=>`<option value="${escHtml(l)}"${l===filterColumn?' selected':''}>${escHtml(l)}</option>`).join('')}
     </select>
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text4)" stroke-width="2" style="margin-left:4px;" title="Funil"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+    <select class="filter-select" id="filter-funnel" onchange="filterFunnel=this.value;render()">
+      <option value="">Todos os funis</option>
+      <option value="__none__"${filterFunnel==='__none__'?' selected':''}>— Sem funil —</option>
+      ${getAllFunnels().map(f=>`<option value="${escHtml(f)}"${f===filterFunnel?' selected':''}>${escHtml(f)}</option>`).join('')}
+    </select>
   </div>`;
 }
 
@@ -807,6 +827,12 @@ function renderBoard() {
   if (currentDept === 'Minhas') {
     board.style.cssText = 'flex-direction:column;overflow-x:hidden;overflow-y:auto;align-items:stretch;flex-wrap:nowrap;padding:24px;gap:0;';
     renderMyView(board);
+    return;
+  }
+
+  if (currentDept === 'Painel') {
+    board.style.cssText = 'flex-direction:row;overflow-x:auto;overflow-y:hidden;align-items:flex-start;flex-wrap:nowrap;padding:20px 24px;gap:16px;';
+    renderPainelView(board);
     return;
   }
 
@@ -822,14 +848,12 @@ function renderBoard() {
   board.innerHTML = cols.map(col => {
     let cards = state.cards.filter(c => c.dept===currentDept && c.column===col.id);
     if (filterAssignee) cards = cards.filter(c => c.assignee===filterAssignee);
-    cards = cards.filter(matchesSearch).filter(matchesColumn);
+    cards = cards.filter(matchesSearch).filter(matchesColumn).filter(matchesFunnel);
     return `
     <div class="column" id="col-${col.id}">
       <div class="col-header">
         <div class="col-dot" style="background:${col.color}"></div>
-        <div class="col-title" id="coltitle-${col.id}"
-             ondblclick="startRenameCol('${currentDept}','${col.id}')"
-             title="Clique duplo para renomear">${escHtml(col.label)}</div>
+        <div class="col-title" id="coltitle-${col.id}">${escHtml(col.label)}</div>
         <div class="col-count">${cards.length}</div>
       </div>
       <div class="col-body" id="colbody-${col.id}"
@@ -846,16 +870,53 @@ function renderBoard() {
         Adicionar card
       </button>
     </div>`;
-  }).join('') + `
-  <div class="add-col-tile" id="add-col-tile" onclick="showAddColInput()">
-    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--text4);padding:24px 16px;">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      <span style="font-size:12px;">Nova coluna</span>
-    </div>
-  </div>`;
+  }).join('');
 }
 
 // ── Minhas atribuições (área pessoal) ───────────────────────────────────────────
+// ── Painel: Kanban global (todos os setores) por status ─────────────────────────
+function renderPainelView(board) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const pass = c => (!filterAssignee || c.assignee===filterAssignee) && matchesSearch(c) && matchesColumn(c) && matchesFunnel(c);
+  const cols = STANDARD_COLUMNS;
+  board.innerHTML = cols.map(col => {
+    const cards = state.cards.filter(c => c.column===col.id && pass(c));
+    return `
+    <div class="column" id="col-${col.id}">
+      <div class="col-header">
+        <div class="col-dot" style="background:${col.color}"></div>
+        <div class="col-title">${escHtml(col.label)}</div>
+        <div class="col-count">${cards.length}</div>
+      </div>
+      <div class="col-body" id="colbody-${col.id}"
+           ondragover="onDragOver(event,'${col.id}')"
+           ondragleave="onDragLeave(event,'${col.id}')"
+           ondrop="onDrop(event,'${col.id}')">
+        ${cards.length===0 ? `<div class="col-empty">Nenhum card</div>`
+          : cards.map(c => {
+            const isOverdue = c.dueDate && new Date(c.dueDate+'T00:00') < today && c.column !== cols[cols.length-1].id;
+            const initials = c.assignee ? c.assignee.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase() : '';
+            const dueStr = c.dueDate ? new Date(c.dueDate+'T00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'short'}) : '';
+            return `
+            <div class="card${isOverdue?' overdue':''}${!c.dueDate?' noprazo':''}" id="card-${c.id}"
+                 draggable="true" ondragstart="onDragStart(event,${c.id},'${c.column}')" ondragend="onDragEnd(event)" onclick="openModal(${c.id})">
+              ${isOverdue?'<span class="overdue-label">⚠ Atrasado</span>':''}
+              ${!c.dueDate?'<span class="noprazo-label">⚠ Definir prazo</span>':''}
+              <span style="display:inline-block;font-size:9px;font-weight:600;color:var(--text3);background:var(--surface3);border-radius:6px;padding:1px 6px;margin-bottom:6px;">${escHtml(c.dept||'—')}</span>
+              ${c.priority?`<span class="card-priority p-${c.priority}" style="margin-left:4px;">${c.priority}</span>`:''}
+              <div class="card-title">${escHtml(c.title||'Sem título')}</div>
+              ${c.funnel?`<span style="display:inline-block;font-size:10px;font-weight:600;color:#c084fc;background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.3);border-radius:8px;padding:1px 7px;margin-bottom:6px;">🪜 ${escHtml(c.funnel)}</span>`:''}
+              <div class="card-meta">
+                ${dueStr?`<span class="card-tag"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${dueStr}</span>`:''}
+                ${c.assignee?`<div class="card-assignee-avatar" title="${escHtml(c.assignee)}">${initials}</div>`:''}
+              </div>
+            </div>`;
+          }).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function renderMyView(board) {
   const me = currentUser?.name;
   if (!me) {
@@ -922,7 +983,7 @@ function renderMyView(board) {
 // ── Geral view ─────────────────────────────────────────────────────────────────
 function renderGeralView(board) {
   const today = new Date(); today.setHours(0,0,0,0);
-  const filteredCards = c => (!filterAssignee || c.assignee===filterAssignee) && matchesSearch(c) && matchesColumn(c);
+  const filteredCards = c => (!filterAssignee || c.assignee===filterAssignee) && matchesSearch(c) && matchesColumn(c) && matchesFunnel(c);
   const activeDepts = DEPARTMENTS.filter(d => state.cards.filter(c => c.dept===d && filteredCards(c)).length > 0);
 
   const allCards = state.cards.filter(filteredCards);
@@ -1010,6 +1071,7 @@ function renderCard(c) {
     ${semPrazo?'<span class="noprazo-label">⚠ Definir prazo</span>':''}
     ${c.priority?`<span class="card-priority ${pClass}">${c.priority}</span>`:''}
     <div class="card-title">${escHtml(c.title||'Sem título')}</div>
+    ${c.funnel?`<span style="display:inline-block;font-size:10px;font-weight:600;color:#c084fc;background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.3);border-radius:8px;padding:1px 7px;margin-bottom:6px;">🪜 ${escHtml(c.funnel)}</span>`:''}
     ${c.description?`<div class="card-desc">${escHtml(c.description)}</div>`:''}
     <div class="card-meta">
       ${dueStr?`<span class="card-tag"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>${dueStr}</span>`:''}
@@ -1022,77 +1084,8 @@ function renderCard(c) {
 // ── Switch Dept ────────────────────────────────────────────────────────────────
 function switchDept(d) {
   currentDept = d;
-  const title = d === 'Geral' ? 'Visão Geral' : (d === 'Minhas' ? 'Minhas atribuições' : d);
+  const title = d === 'Geral' ? 'Visão Geral' : (d === 'Minhas' ? 'Minhas atribuições' : (d === 'Painel' ? 'Painel — Kanban Geral' : d));
   document.getElementById('board-title').textContent = title;
-  render();
-}
-
-// ── Column management ─────────────────────────────────────────────────────────
-function showAddColInput() {
-  const tile = document.getElementById('add-col-tile');
-  if (!tile) return;
-  tile.style.cursor = 'default';
-  tile.onclick = null;
-  tile.innerHTML = `
-    <div style="padding:16px 12px;display:flex;flex-direction:column;gap:8px;width:100%;">
-      <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:2px;">Nome da coluna</div>
-      <input type="text" id="new-col-input" placeholder="Ex: Em teste…" maxlength="30"
-        style="background:var(--surface2);border:1px solid var(--orange);border-radius:6px;color:#fff;padding:8px 10px;font-size:13px;outline:none;font-family:inherit;"
-        onkeydown="if(event.key==='Enter'){event.preventDefault();confirmAddCol();}if(event.key==='Escape')render();"/>
-      <div style="display:flex;gap:6px;">
-        <button onclick="confirmAddCol()" style="flex:1;padding:7px;background:var(--orange);border:none;border-radius:6px;color:#000;font-size:12px;font-weight:700;cursor:pointer;">Criar</button>
-        <button onclick="render()" style="padding:7px 10px;background:transparent;border:1px solid var(--border2);border-radius:6px;color:var(--text3);font-size:12px;cursor:pointer;">✕</button>
-      </div>
-    </div>`;
-  setTimeout(() => document.getElementById('new-col-input')?.focus(), 50);
-}
-
-function confirmAddCol() {
-  const input = document.getElementById('new-col-input');
-  const name = input?.value?.trim();
-  if (!name) return;
-  if (!state.deptColumns[currentDept]) {
-    state.deptColumns[currentDept] = getColumnsForDept(currentDept).map(c => ({...c}));
-  }
-  const id = name.toLowerCase().replace(/[^a-z0-9]/g,'-') + '-' + Date.now().toString(36);
-  const color = COLUMN_COLORS[state.deptColumns[currentDept].length % COLUMN_COLORS.length];
-  state.deptColumns[currentDept].push({ id, label: name, color });
-  saveState();
-  render();
-  toast(`Coluna "${name}" criada`, 'success');
-}
-
-function startRenameCol(dept, colId) {
-  const el = document.getElementById('coltitle-' + colId);
-  if (!el) return;
-  const current = el.textContent;
-  const inp = document.createElement('input');
-  inp.type = 'text';
-  inp.value = current;
-  inp.id = 'coltitle-' + colId;
-  inp.style.cssText = 'background:transparent;border:none;border-bottom:1px solid var(--orange);color:#fff;font-size:13px;font-weight:600;flex:1;outline:none;padding:0;font-family:inherit;min-width:0;width:100%;';
-  let saved = false;
-  inp.onblur = () => {
-    if (saved) return;
-    saved = true;
-    saveRenameCol(dept, colId, inp.value.trim() || current);
-  };
-  inp.onkeydown = e => {
-    if (e.key === 'Enter') { e.preventDefault(); saved = true; saveRenameCol(dept, colId, inp.value.trim() || current); }
-    if (e.key === 'Escape') { saved = true; render(); }
-  };
-  el.replaceWith(inp);
-  inp.focus();
-  inp.select();
-}
-
-function saveRenameCol(dept, colId, newName) {
-  if (!newName) return render();
-  if (!state.deptColumns[dept]) {
-    state.deptColumns[dept] = getColumnsForDept(dept).map(c => ({...c}));
-  }
-  const col = state.deptColumns[dept].find(c => c.id === colId);
-  if (col) { col.label = newName; saveState(); }
   render();
 }
 
@@ -1129,6 +1122,8 @@ async function onDrop(e, colId) {
   }
   const fromLabel = cols.find(c => c.id===card.column)?.label || card.column;
   const toLabel   = cols.find(c => c.id===colId)?.label || colId;
+  if (!card.history) card.history = [];
+  card.history.push({ type:'move', from:fromLabel, to:toLabel, by:(currentUser?.name||'Alguém'), ts:new Date().toISOString() });
   card.column = colId;
   saveState(); render();
   logActivity(`moveu <b>${escHtml(card.title)}</b> de ${escHtml(fromLabel)} → ${escHtml(toLabel)}`);
@@ -1136,7 +1131,7 @@ async function onDrop(e, colId) {
 
 // ── Modal ──────────────────────────────────────────────────────────────────────
 function openModal(cardId, dept, defaultCol) {
-  const realDept = (!dept || dept === 'Geral' || dept === 'Minhas') ? DEPARTMENTS[0] : dept;
+  const realDept = (!dept || ['Geral','Minhas','Painel'].includes(dept)) ? DEPARTMENTS[0] : dept;
 
   // Assignee dropdown
   const sel = document.getElementById('modal-assignee');
@@ -1156,6 +1151,10 @@ function openModal(cardId, dept, defaultCol) {
     refreshStatusSelector();
   };
 
+  // Datalist de funis (sugestões)
+  document.getElementById('funnel-list').innerHTML =
+    getAllFunnels().map(f => `<option value="${escHtml(f)}"></option>`).join('');
+
   if (cardId === null) {
     editingCard = null;
     modalDept = realDept;
@@ -1163,12 +1162,14 @@ function openModal(cardId, dept, defaultCol) {
     document.getElementById('modal-assignee').value = '';
     document.getElementById('modal-priority').value = '';
     document.getElementById('modal-due').value = '';
+    document.getElementById('modal-funnel').value = '';
     document.getElementById('modal-desc').value = '';
     document.getElementById('comments-list').innerHTML = '';
     document.getElementById('comment-input').value = '';
     document.getElementById('btn-delete').style.display = 'none';
     document.getElementById('modal-dept-badge').textContent = realDept;
     refreshStatusSelector(defaultCol || getColumnsForDept(realDept)[0]?.id);
+    renderHistory(null);
   } else {
     const card = state.cards.find(c => c.id===cardId);
     if (!card) return;
@@ -1179,12 +1180,14 @@ function openModal(cardId, dept, defaultCol) {
     document.getElementById('modal-assignee').value = card.assignee || '';
     document.getElementById('modal-priority').value = card.priority || '';
     document.getElementById('modal-due').value = card.dueDate || '';
+    document.getElementById('modal-funnel').value = card.funnel || '';
     document.getElementById('modal-desc').value = card.description || '';
     document.getElementById('modal-dept-badge').textContent = card.dept;
     document.getElementById('btn-delete').style.display = '';
     document.getElementById('comment-input').value = '';
     refreshStatusSelector(card.column);
     renderComments(card.comments||[]);
+    renderHistory(card);
   }
 
   applyDateLock();
@@ -1226,6 +1229,26 @@ function renderComments(comments) {
   }).join('');
 }
 
+function renderHistory(card) {
+  const list = document.getElementById('history-list');
+  const h = (card && card.history) || [];
+  if (!h.length) { list.innerHTML = '<div style="font-size:12px;color:var(--text4);font-style:italic;">Sem movimentações registradas.</div>'; return; }
+  const fmtD = d => (d && d !== '(sem)') ? new Date(d+'T00:00').toLocaleDateString('pt-BR') : '(sem)';
+  list.innerHTML = [...h].reverse().map(e => {
+    const when = new Date(e.ts).toLocaleString('pt-BR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+    let txt, icon, color;
+    if (e.type === 'create') { txt = `criou em <b>${escHtml(e.to)}</b>`; icon='✚'; color='var(--green)'; }
+    else if (e.type === 'move') { txt = `moveu <b>${escHtml(e.from)}</b> → <b>${escHtml(e.to)}</b>`; icon='↔'; color='var(--orange)'; }
+    else if (e.type === 'due') { txt = `prazo <b>${fmtD(e.from)}</b> → <b>${fmtD(e.to)}</b>`; icon='📅'; color='var(--blue)'; }
+    else { txt = escHtml(e.type); icon='•'; color='var(--text3)'; }
+    return `<div style="display:flex;gap:8px;align-items:baseline;font-size:12px;color:var(--text2);padding:5px 0;border-bottom:1px solid var(--border);">
+      <span style="color:${color};flex-shrink:0;">${icon}</span>
+      <span style="flex:1;">${txt} <span style="color:var(--text4);">· ${escHtml(e.by||'')}</span></span>
+      <span style="color:var(--text4);flex-shrink:0;font-size:11px;">${when}</span>
+    </div>`;
+  }).join('');
+}
+
 function closeModal() {
   document.getElementById('modal-overlay').classList.remove('open');
   editingCard = null;
@@ -1242,10 +1265,19 @@ async function saveModal() {
   const assignee = document.getElementById('modal-assignee').value;
   const priority = document.getElementById('modal-priority').value;
   const dueDate  = document.getElementById('modal-due').value;
+  const funnel   = document.getElementById('modal-funnel').value.trim();
   const desc     = document.getElementById('modal-desc').value.trim();
   const dept     = document.getElementById('modal-dept-select').value;
   const cols     = getColumnsForDept(dept);
-  const finalCol = column || cols[0]?.id || 'backlog';
+  const finalCol = column || cols[0]?.id || 'briefing';
+
+  // Registra funil novo na lista
+  if (funnel && !(state.funnels||[]).includes(funnel)) {
+    if (!state.funnels) state.funnels = [];
+    state.funnels.push(funnel);
+  }
+  const who = currentUser?.name || 'Alguém';
+  const nowTs = new Date().toISOString();
 
   // Prazo é OBRIGATÓRIO em todo card
   if (!dueDate) {
@@ -1259,17 +1291,28 @@ async function saveModal() {
   if (editingCard) {
     const prevAssignee = editingCard.assignee;
     const prevCol      = editingCard.column;
+    const prevDue      = editingCard.dueDate;
     const prevColLabel = cols.find(c=>c.id===prevCol)?.label || prevCol;
+    if (!editingCard.history) editingCard.history = [];
+    // Histórico: mudança de status
+    if (prevCol !== finalCol) {
+      editingCard.history.push({ type:'move', from:prevColLabel, to:colLabel, by:who, ts:nowTs });
+    }
+    // Histórico: mudança de prazo (data que era + nova)
+    if (prevDue !== dueDate) {
+      editingCard.history.push({ type:'due', from:prevDue||'(sem)', to:dueDate, by:who, ts:nowTs });
+    }
     editingCard.title = title; editingCard.column = finalCol; editingCard.assignee = assignee;
     editingCard.priority = priority; editingCard.dueDate = dueDate; editingCard.description = desc; editingCard.dept = dept;
+    editingCard.funnel = funnel;
     saveState();
-    // Feed de atividades (sem email)
     if (prevAssignee !== assignee && assignee) logActivity(`atribuiu <b>${escHtml(title)}</b> para ${escHtml(assignee)}`);
     if (prevCol !== finalCol) logActivity(`moveu <b>${escHtml(title)}</b> de ${escHtml(prevColLabel)} → ${escHtml(colLabel)}`);
+    if (prevDue !== dueDate) logActivity(`alterou o prazo de <b>${escHtml(title)}</b>: ${escHtml(prevDue||'(sem)')} → ${escHtml(dueDate)}`);
   } else {
     const newCard = {
-      id: state.nextId++, dept, title, column: finalCol, assignee, priority, dueDate,
-      description: desc, comments:[], createdAt: new Date().toISOString(),
+      id: state.nextId++, dept, title, column: finalCol, assignee, priority, dueDate, funnel,
+      description: desc, comments:[], history:[{ type:'create', to:colLabel, by:who, ts:nowTs }], createdAt: nowTs,
     };
     state.cards.push(newCard);
     saveState();
@@ -1500,7 +1543,6 @@ if (new URLSearchParams(location.search).get('google') === 'connected') {
 (async () => {
   setSyncStatus('saving');
   await loadStateFromServer();
-  seedDeptColumns();   // sets Marketing columns if not yet defined
   seedDefaults();      // seeds example cards only if board is empty
   await checkServer();
   currentDept = 'Minhas';

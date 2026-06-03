@@ -332,22 +332,21 @@ function adminEmailsWithName() {
 }
 
 // Colunas por setor no servidor (espelha o frontend) — usado para detectar card "concluído"
+// Etapas padrão (espelha o frontend). Última = concluído (Publicado).
 const SRV_DEFAULT_COLUMNS = [
-  { id:'backlog',   label:'Backlog' },
-  { id:'andamento', label:'Em andamento' },
+  { id:'briefing',  label:'Briefing' },
+  { id:'criacao',   label:'Criação' },
   { id:'revisao',   label:'Revisão' },
-  { id:'concluido', label:'Concluído' },
+  { id:'aprovacao', label:'Aprovação' },
+  { id:'publicado', label:'Publicado' },
 ];
-function getServerColumns(dept) {
-  const raw = readState();
-  const dc = raw.state && raw.state.deptColumns;
-  if (dc && dc[dept]) return dc[dept];
+// ids antigos que também contam como "concluído"
+const DONE_COLUMN_IDS = new Set(['publicado', 'concluido', 'live']);
+function getServerColumns() {
   return SRV_DEFAULT_COLUMNS;
 }
 function isCardDone(card) {
-  const cols = getServerColumns(card.dept);
-  const lastId = cols[cols.length - 1]?.id;
-  return card.column === lastId;
+  return DONE_COLUMN_IDS.has(card.column);
 }
 
 function timestamp() {
@@ -413,6 +412,7 @@ function cardMetaHtml(card) {
   const dept     = card.dept || card.department || '—';
   const due      = card.dueDate ? new Date(card.dueDate + 'T00:00').toLocaleDateString('pt-BR') : '—';
   const status   = card.status || card.column || '—';
+  const funnel   = card.funnel || '';
   return `
   <div class="card-box">
     <div class="label">Card</div>
@@ -420,6 +420,7 @@ function cardMetaHtml(card) {
     ${card.description ? `<div style="font-size:13px;color:#888;margin-top:8px;">${card.description}</div>` : ''}
     <div class="meta-row">
       <div class="meta-item"><div class="label">Departamento</div><div class="value">${dept}</div></div>
+      ${funnel ? `<div class="meta-item"><div class="label">Funil</div><div class="value">${funnel}</div></div>` : ''}
       <div class="meta-item"><div class="label">Status</div><div class="value">${status}</div></div>
       <div class="meta-item"><div class="label">Prioridade</div><div class="value">${priority}</div></div>
       <div class="meta-item"><div class="label">Prazo</div><div class="value">${due}</div></div>
@@ -485,27 +486,24 @@ function buildCommentEmail({ card, assignee, changer, comment }) {
   });
 }
 
-function buildDeadlineEmail({ card, type, diffDays }) {
-  const isOverdue = type === 'overdue';
-  const accent = isOverdue ? '#ef4444' : '#FF9800';
-  let prazoTexto;
-  if (isOverdue) {
-    const dias = Math.abs(diffDays);
-    prazoTexto = `Este card está <strong style="color:${accent};">VENCIDO há ${dias} dia${dias!==1?'s':''}</strong>.`;
-  } else if (diffDays === 0) {
-    prazoTexto = `O prazo deste card é <strong style="color:${accent};">HOJE</strong>.`;
-  } else {
-    prazoTexto = `O prazo deste card vence em <strong style="color:${accent};">${diffDays} dia${diffDays!==1?'s':''}</strong>.`;
-  }
+// Alertas de tarefa (5 marcos): created, due_1d, due_today, overdue_1d, overdue_7d
+const TASK_ALERTS = {
+  created:    { accent:'#FF9800', emoji:'📋', headline:'Nova tarefa para você',      subject:'Nova tarefa atribuída', msg:'Uma nova tarefa foi atribuída a você. Acesse o Kanban para começar.' },
+  due_1d:     { accent:'#FF9800', emoji:'⏰', headline:'Falta 1 dia para o prazo',    subject:'Falta 1 dia',           msg:'O prazo desta tarefa é <strong>amanhã</strong>. Garanta a entrega no prazo.' },
+  due_today:  { accent:'#FF9800', emoji:'⏰', headline:'O prazo é HOJE',              subject:'Prazo é hoje',          msg:'O prazo desta tarefa é <strong>hoje</strong>. Conclua ainda hoje ou avise se precisar de ajuste.' },
+  overdue_1d: { accent:'#ef4444', emoji:'⚠️', headline:'Tarefa atrasada',            subject:'Tarefa ATRASADA',       msg:'Esta tarefa <strong>passou do prazo</strong>. Atualize o status ou solicite ajuste de prazo ao seu gestor.' },
+  overdue_7d: { accent:'#ef4444', emoji:'🚨', headline:'Tarefa 7 dias atrasada',     subject:'Tarefa 7 DIAS atrasada',msg:'Esta tarefa está <strong>7 dias atrasada</strong>. Resolva com urgência ou alinhe um novo prazo.' },
+};
+function buildTaskAlertEmail({ card, kind }) {
+  const a = TASK_ALERTS[kind] || TASK_ALERTS.created;
   const body = `
     <div class="message">
-      Olá <strong style="color:${accent};">${card.assignee || 'time'}</strong>, ${prazoTexto}
-      ${isOverdue ? 'Atualize o status ou solicite ajuste de prazo ao seu gestor.' : 'Garanta a entrega no prazo ou avise antecipadamente se precisar de mais tempo.'}
+      Olá <strong style="color:${a.accent};">${card.assignee || 'time'}</strong>, ${a.msg}
     </div>
     ${cardMetaHtml(card)}`;
   return buildEmailHtml({
-    subject:  isOverdue ? `⚠️ [Kanban FM] Prazo VENCIDO: ${card.title}` : `⏰ [Kanban FM] Prazo se aproximando: ${card.title}`,
-    headline: isOverdue ? `⚠️ Prazo vencido` : `⏰ Prazo se aproximando`,
+    subject:  `${a.emoji} [Kanban FM] ${a.subject}: ${card.title}`,
+    headline: `${a.emoji} ${a.headline}`,
     body,
     ctaLabel: 'Abrir no Kanban →',
     ctaUrl:   appUrl,
@@ -719,7 +717,47 @@ app.post('/api/state', (req, res) => {
   const updated_at = writeState(state);
   // Devolve o estado mesclado para o cliente adotar imediatamente
   res.json({ ok: true, updated_at, state });
+
+  // Email de "tarefa criada" p/ cards novos com responsável (fire-and-forget)
+  try {
+    const prevIds = new Set((prev.cards || []).map(c => c.id));
+    const novos = (state.cards || []).filter(c => !prevIds.has(c.id) && c.assignee);
+    if (novos.length) notifyCreatedTasks(novos);
+  } catch {}
 });
+
+// Envia email "nova tarefa" ao responsável de cada card recém-criado (sem repetir)
+const createdNotifiedFile = path.join(dataDir, 'created-notified.json');
+function loadCreatedNotified() { try { return new Set(JSON.parse(fs.readFileSync(createdNotifiedFile,'utf-8'))); } catch { return new Set(); } }
+function saveCreatedNotified(set) { try { fs.writeFileSync(createdNotifiedFile, JSON.stringify([...set].slice(-2000)), 'utf-8'); } catch {} }
+async function notifyCreatedTasks(cards) {
+  if (!gmailUser || !gmailPassword) return;
+  const notified = loadCreatedNotified();
+  const full = getFullTeam();
+  let changed = false;
+  for (const card of cards) {
+    if (notified.has(card.id)) continue;
+    const member = full.find(m => m.name === card.assignee && m.email);
+    if (!member) { notified.add(card.id); changed = true; continue; }
+    try {
+      const ccSet = new Set();
+      const head = full.find(m => isHeadOf(m, card.dept) && m.email && m.email !== member.email);
+      if (head) ccSet.add(head.email);
+      await transporter.sendMail({
+        from: `"Financial Move Kanban" <${gmailUser}>`,
+        to: member.email,
+        cc: [...ccSet].join(', '),
+        subject: `📋 [Kanban FM] Nova tarefa atribuída: ${card.title}`,
+        html: buildTaskAlertEmail({ card, kind: 'created' }),
+      });
+      console.log(`[${timestamp()}] 📋 tarefa criada → ${member.email} | "${card.title}"`);
+    } catch (err) {
+      console.error(`[${timestamp()}] ❌ email tarefa criada "${card.title}":`, err.message);
+    }
+    notified.add(card.id); changed = true;
+  }
+  if (changed) saveCreatedNotified(notified);
+}
 
 // Team list (no credentials exposed)
 app.get('/api/team', (req, res) => {
@@ -1534,41 +1572,40 @@ async function scanDeadlines() {
     const due = new Date(card.dueDate + 'T00:00');
     const diffDays = Math.round((due - today) / 86400000);
 
-    let type = null;
-    if (diffDays < 0) type = 'overdue';            // vencido
-    else if (diffDays <= 2) type = 'approaching';  // vence hoje, amanhã ou em 2 dias
-    if (!type) continue;
+    // Marcos: 1 dia antes, no dia, 1 dia atrasada, 7 dias atrasada
+    let kind = null;
+    if (diffDays === 1)       kind = 'due_1d';
+    else if (diffDays === 0)  kind = 'due_today';
+    else if (diffDays === -1) kind = 'overdue_1d';
+    else if (diffDays === -7) kind = 'overdue_7d';
+    if (!kind) continue;
 
-    // Destinatários: responsável + chefe do setor + admin (Tasso)
-    const recipients = new Set();
+    // Destinatário principal: o responsável. CC: chefe do setor + admin.
     const assigneeMember = full.find(m => m.name === card.assignee && m.email);
-    if (assigneeMember) recipients.add(assigneeMember.email);
-    const head = full.find(m => isHeadOf(m, card.dept) && m.email);
-    if (head) recipients.add(head.email);
-    ADMIN_EMAILS.forEach(e => recipients.add(e));
-    if (!recipients.size) continue;
+    if (!assigneeMember) continue; // sem email do responsável, não há pra quem mandar
+    const ccSet = new Set();
+    const head = full.find(m => isHeadOf(m, card.dept) && m.email && m.email !== assigneeMember.email);
+    if (head) ccSet.add(head.email);
+    ADMIN_EMAILS.forEach(e => { if (e !== assigneeMember.email) ccSet.add(e); });
 
     try {
-      const html = buildDeadlineEmail({ card, type, diffDays });
+      const html = buildTaskAlertEmail({ card, kind });
+      const a = TASK_ALERTS[kind];
       await transporter.sendMail({
         from:    `"Financial Move Kanban" <${gmailUser}>`,
-        to:      [...recipients].join(', '),
-        subject: type === 'overdue'
-          ? `⚠️ [Kanban FM] Prazo VENCIDO: ${card.title}`
-          : `⏰ [Kanban FM] Prazo se aproximando: ${card.title}`,
+        to:      assigneeMember.email,
+        cc:      [...ccSet].join(', '),
+        subject: `${a.emoji} [Kanban FM] ${a.subject}: ${card.title}`,
         html,
       });
       alerts++;
-      // Também registra no feed de atividades
       const titleEsc = String(card.title || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       const respEsc  = String(card.assignee || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      const txt = type === 'overdue'
-        ? `⚠️ Prazo vencido: <b>${titleEsc}</b> (há ${Math.abs(diffDays)}d) — resp. ${respEsc}`
-        : `⏰ Prazo se aproximando: <b>${titleEsc}</b> (${diffDays===0?'vence hoje':'em '+diffDays+'d'}) — resp. ${respEsc}`;
-      feedEntries.push({ id: Date.now() + Math.random(), ts: new Date().toISOString(), user: '🤖 Robô de prazos', text: txt });
-      console.log(`[${timestamp()}] ${type==='overdue'?'⚠️':'⏰'} alerta de prazo → ${[...recipients].join(', ')} | card: "${card.title}" (${diffDays}d)`);
+      const labelTxt = { due_1d:'falta 1 dia', due_today:'vence hoje', overdue_1d:'atrasada', overdue_7d:'7 dias atrasada' }[kind];
+      feedEntries.push({ id: Date.now() + Math.random(), ts: new Date().toISOString(), user: '🤖 Robô de prazos', text: `${a.emoji} ${labelTxt}: <b>${titleEsc}</b> — resp. ${respEsc}` });
+      console.log(`[${timestamp()}] ${a.emoji} alerta (${kind}) → ${assigneeMember.email} | card: "${card.title}"`);
     } catch (err) {
-      console.error(`[${timestamp()}] ❌ Falha ao enviar alerta de prazo "${card.title}":`, err.message);
+      console.error(`[${timestamp()}] ❌ Falha no alerta "${card.title}":`, err.message);
     }
   }
 
@@ -1597,7 +1634,7 @@ app.post('/api/debug/scan-deadlines', requireAdmin, async (req, res) => {
 });
 
 // Exporta builders para scripts de teste (sem subir o servidor)
-module.exports = { buildAssignedEmail, buildStatusChangedEmail, buildCommentEmail, buildDeadlineEmail };
+module.exports = { buildAssignedEmail, buildStatusChangedEmail, buildCommentEmail, buildTaskAlertEmail };
 
 // ── Start (só quando executado direto, não quando importado) ────────────────────
 if (require.main === module) {
