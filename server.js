@@ -203,7 +203,7 @@ app.use(session({
 }));
 
 // ── Auth middleware ───────────────────────────────────────────────────────────
-const PUBLIC_PATHS = ['/login', '/auth/login', '/auth/callback', '/health', '/api/admin/import-cards'];
+const PUBLIC_PATHS = ['/login', '/auth/login', '/auth/callback', '/health', '/api/admin/import-cards', '/api/debug/test-email'];
 
 function requireAuth(req, res, next) {
   if (PUBLIC_PATHS.some(p => req.path.startsWith(p))) return next();
@@ -311,12 +311,33 @@ app.get('/api/me', (req, res) => {
 });
 
 // ── Nodemailer transporter ────────────────────────────────────────────────────
-const transporter = nodemailer.createTransport({
-  host:   'smtp.gmail.com',
-  port:   465,
-  secure: true,
-  auth:   { user: gmailUser, pass: gmailPassword },
-});
+// Transporte primário (465/SSL) e fallback (587/STARTTLS) com timeouts
+const mailOpts = {
+  auth: { user: gmailUser, pass: gmailPassword },
+  connectionTimeout: 15000,
+  greetingTimeout:   10000,
+  socketTimeout:     20000,
+  pool: true, maxConnections: 2,
+};
+const transporter   = nodemailer.createTransport({ host:'smtp.gmail.com', port:465, secure:true,  ...mailOpts });
+const transporter587 = nodemailer.createTransport({ host:'smtp.gmail.com', port:587, secure:false, requireTLS:true, ...mailOpts });
+
+// Envia com retry + fallback de porta (resolve timeout intermitente do host → Gmail)
+async function sendMailRobust(opts) {
+  const payload = { from: `"Financial Move Kanban" <${gmailUser}>`, ...opts };
+  // tenta 465 (2x) depois 587 (1x)
+  const attempts = [transporter, transporter, transporter587];
+  let lastErr;
+  for (let i = 0; i < attempts.length; i++) {
+    try {
+      return await attempts[i].sendMail(payload);
+    } catch (e) {
+      lastErr = e;
+      console.warn(`[${timestamp()}] ✉️  tentativa ${i+1} falhou (${attempts[i].options.port}): ${e.message}`);
+    }
+  }
+  throw lastErr;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 // IMPORTANTE: usa getFullTeam() (usuários registrados no login + config.js),
@@ -611,6 +632,20 @@ app.get('/api/state', (req, res) => {
   res.json({ state, updated_at });
 });
 
+// Teste de envio de e-mail (token) — valida conectividade SMTP na produção
+app.post('/api/debug/test-email', async (req, res) => {
+  if (!process.env.IMPORT_TOKEN || req.headers['x-import-token'] !== process.env.IMPORT_TOKEN) {
+    return res.status(403).json({ ok: false, error: 'Não autorizado' });
+  }
+  const to = req.body.to || ADMIN_EMAILS[0];
+  try {
+    const info = await sendMailRobust({ to, subject: '✅ [Kanban FM] Teste de envio', html: '<p>Teste de conectividade SMTP do servidor de produção. Se chegou, os e-mails estão funcionando.</p>' });
+    res.json({ ok: true, to, response: info.response, messageId: info.messageId });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // Save kanban state
 // Importação de cards (ata de reunião) — admin (sessão) OU token via header.
 // Pula cards cujo título já existe (evita duplicar com cards já criados).
@@ -743,8 +778,7 @@ async function notifyCreatedTasks(cards) {
       const ccSet = new Set();
       const head = full.find(m => isHeadOf(m, card.dept) && m.email && m.email !== member.email);
       if (head) ccSet.add(head.email);
-      await transporter.sendMail({
-        from: `"Financial Move Kanban" <${gmailUser}>`,
+      await sendMailRobust({
         to: member.email,
         cc: [...ccSet].join(', '),
         subject: `📋 [Kanban FM] Nova tarefa atribuída: ${card.title}`,
@@ -801,8 +835,7 @@ app.post('/api/notify', async (req, res) => {
       const ccList = [...ccSet];
 
       const html = buildAssignedEmail({ card, assignee, changer });
-      const info = await transporter.sendMail({
-        from:    `"Financial Move Kanban" <${gmailUser}>`,
+      const info = await sendMailRobust({
         to:      assigneeMember.email,
         cc:      ccList.join(', '),
         subject: `[Kanban FM] Card atribuído: ${card.title}`,
@@ -817,8 +850,7 @@ app.post('/api/notify', async (req, res) => {
         return res.status(400).json({ ok: false, error: 'Assignee has no email configured' });
       }
       const html = buildStatusChangedEmail({ card, assignee, changer });
-      const info = await transporter.sendMail({
-        from:    `"Financial Move Kanban" <${gmailUser}>`,
+      const info = await sendMailRobust({
         to:      assigneeMember.email,
         subject: `[Kanban FM] Status atualizado: ${card.title}`,
         html,
@@ -832,8 +864,7 @@ app.post('/api/notify', async (req, res) => {
         return res.status(400).json({ ok: false, error: 'Assignee has no email configured' });
       }
       const html = buildCommentEmail({ card, assignee, changer, comment });
-      const info = await transporter.sendMail({
-        from:    `"Financial Move Kanban" <${gmailUser}>`,
+      const info = await sendMailRobust({
         to:      assigneeMember.email,
         subject: `[Kanban FM] Novo comentário: ${card.title}`,
         html,
@@ -1393,7 +1424,7 @@ app.post('/api/admin/team/:email', requireAdmin, (req, res) => {
 // ── Fluxo de aprovação de mudança de prazo ──────────────────────────────────────
 async function safeSendMail(opts) {
   if (!gmailUser || !gmailPassword) return;
-  try { await transporter.sendMail({ from: `"Financial Move Kanban" <${gmailUser}>`, ...opts }); }
+  try { await sendMailRobust(opts); }
   catch (e) { console.error(`[${timestamp()}] ❌ email:`, e.message); }
 }
 function deptHeadEmail(dept) {
@@ -1591,8 +1622,7 @@ async function scanDeadlines() {
     try {
       const html = buildTaskAlertEmail({ card, kind });
       const a = TASK_ALERTS[kind];
-      await transporter.sendMail({
-        from:    `"Financial Move Kanban" <${gmailUser}>`,
+      await sendMailRobust({
         to:      assigneeMember.email,
         cc:      [...ccSet].join(', '),
         subject: `${a.emoji} [Kanban FM] ${a.subject}: ${card.title}`,
