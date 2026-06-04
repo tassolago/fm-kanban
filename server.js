@@ -203,7 +203,7 @@ app.use(session({
 }));
 
 // ── Auth middleware ───────────────────────────────────────────────────────────
-const PUBLIC_PATHS = ['/login', '/auth/login', '/auth/callback', '/health', '/api/admin/import-cards', '/api/debug/test-email'];
+const PUBLIC_PATHS = ['/login', '/auth/login', '/auth/callback', '/health', '/api/admin/import-cards', '/api/debug/test-email', '/api/debug/resend-created'];
 
 function requireAuth(req, res, next) {
   if (PUBLIC_PATHS.some(p => req.path.startsWith(p))) return next();
@@ -652,6 +652,26 @@ app.post('/api/debug/restore-backup', requireAdmin, (req, res) => {
 app.get('/api/state', (req, res) => {
   const { state, updated_at } = readState();
   res.json({ state, updated_at });
+});
+
+// Reenviar e-mail de "tarefa criada" de um card (por título) — token
+app.post('/api/debug/resend-created', async (req, res) => {
+  if (!process.env.IMPORT_TOKEN || req.headers['x-import-token'] !== process.env.IMPORT_TOKEN) {
+    return res.status(403).json({ ok: false, error: 'Não autorizado' });
+  }
+  const q = (req.body.title || '').toLowerCase().trim();
+  const assigneeQ = (req.body.assignee || '').toLowerCase().trim();
+  const { state } = readState();
+  let cards = (state.cards || []).filter(c => c.assignee);
+  if (q) cards = cards.filter(c => (c.title||'').toLowerCase().includes(q));
+  if (assigneeQ) cards = cards.filter(c => (c.assignee||'').toLowerCase().includes(assigneeQ));
+  if (!cards.length) return res.json({ ok: false, error: 'Nenhum card encontrado', match: [] });
+  // limpa o flag de notificado p/ forçar reenvio
+  const notified = loadCreatedNotified();
+  cards.forEach(c => notified.delete(c.id));
+  saveCreatedNotified(notified);
+  await notifyCreatedTasks(cards);
+  res.json({ ok: true, reenviados: cards.map(c => ({ title:c.title, assignee:c.assignee, dept:c.dept })) });
 });
 
 // Teste de envio de e-mail (token) — valida conectividade SMTP na produção
