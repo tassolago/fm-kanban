@@ -1,0 +1,13 @@
+{
+  "name": "fm-kanban-mcp",
+  "version": "1.0.0",
+  "description": "MCP server para consultar e editar o Kanban da Financial Move via agente",
+  "type": "module",
+  "bin": { "fm-kanban-mcp": "index.js" },
+  "main": "index.js",
+  "scripts": { "start": "node index.js" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "zod": "^3.23.8"
+  }
+}

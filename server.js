@@ -203,7 +203,7 @@ app.use(session({
 }));
 
 // ── Auth middleware ───────────────────────────────────────────────────────────
-const PUBLIC_PATHS = ['/login', '/auth/login', '/auth/callback', '/health', '/api/admin/import-cards', '/api/debug/test-email', '/api/debug/resend-created'];
+const PUBLIC_PATHS = ['/login', '/auth/login', '/auth/callback', '/health', '/api/admin/import-cards', '/api/debug/test-email', '/api/debug/resend-created', '/api/agent'];
 
 function requireAuth(req, res, next) {
   if (PUBLIC_PATHS.some(p => req.path.startsWith(p))) return next();
@@ -739,6 +739,165 @@ app.post('/api/admin/import-cards', (req, res) => {
   const updated_at = writeState(state);
   console.log(`[${timestamp()}] 📥 Import: ${created.length} criado(s), ${skipped.length} pulado(s)`);
   res.json({ ok: true, created, skipped, updated_at });
+});
+
+// ════════════════════════════════════════════════════════════════════════════════
+// API DE AGENTE (MCP) — consultar/criar/editar cards via chave de API
+// ════════════════════════════════════════════════════════════════════════════════
+const AGENT_API_KEY = process.env.AGENT_API_KEY || '';
+const DEPARTMENTS_SRV = ['Dados','Financeiro','Marketing','CS','Comercial','Tech','Operações','Infra','Jurídico','Imprensa'];
+const PRIORITIES_SRV  = ['Alta','Média','Baixa'];
+
+function requireAgent(req, res, next) {
+  const key = req.headers['x-api-key'];
+  if (!AGENT_API_KEY || key !== AGENT_API_KEY) return res.status(403).json({ ok:false, error:'Chave de API inválida' });
+  next();
+}
+function colLabelById(id) {
+  return (SRV_DEFAULT_COLUMNS.find(c => c.id === id) || {}).label || id;
+}
+function colIdByLabel(label) {
+  if (!label) return null;
+  const l = String(label).toLowerCase();
+  const c = SRV_DEFAULT_COLUMNS.find(c => c.id === l || c.label.toLowerCase() === l);
+  return c ? c.id : null;
+}
+function cardPublic(c) {
+  return {
+    id: c.id, title: c.title, dept: c.dept, assignee: c.assignee || '',
+    column: c.column, status: colLabelById(c.column),
+    priority: c.priority || '', dueDate: c.dueDate || '', funnel: c.funnel || '',
+    description: c.description || '',
+    overdue: !!(c.dueDate && new Date(c.dueDate+'T00:00') < new Date(new Date().toDateString()) && !isCardDone(c)),
+    comments: (c.comments||[]).length, history: (c.history||[]).length,
+    createdAt: c.createdAt || '',
+  };
+}
+
+// Metadados (setores, colunas, funis, prioridades)
+app.get('/api/agent/meta', requireAgent, (req, res) => {
+  const { state } = readState();
+  const funnels = new Set(state.funnels || []);
+  (state.cards||[]).forEach(c => { if (c.funnel) funnels.add(c.funnel); });
+  res.json({ ok:true,
+    departments: DEPARTMENTS_SRV,
+    columns: SRV_DEFAULT_COLUMNS.map(c => ({ id:c.id, label:c.label })),
+    priorities: PRIORITIES_SRV,
+    funnels: [...funnels].sort(),
+  });
+});
+
+// Time
+app.get('/api/agent/team', requireAgent, (req, res) => {
+  res.json({ ok:true, team: getFullTeam().map(m => ({ name:m.name, email:m.email, area:m.area||'', role:m.role||'' })) });
+});
+
+// Listar cards (filtros: dept, assignee, funnel, column/status, search, overdue)
+app.get('/api/agent/cards', requireAgent, (req, res) => {
+  const { state } = readState();
+  let cards = (state.cards || []).slice();
+  const { dept, assignee, funnel, column, status, search, overdue } = req.query;
+  if (dept)     cards = cards.filter(c => (c.dept||'').toLowerCase() === String(dept).toLowerCase());
+  if (assignee) cards = cards.filter(c => (c.assignee||'').toLowerCase().includes(String(assignee).toLowerCase()));
+  if (funnel)   cards = cards.filter(c => (c.funnel||'').toLowerCase() === String(funnel).toLowerCase());
+  const colId = colIdByLabel(column || status);
+  if (colId)    cards = cards.filter(c => c.column === colId);
+  if (search)   cards = cards.filter(c => (c.title||'').toLowerCase().includes(String(search).toLowerCase()) || (c.description||'').toLowerCase().includes(String(search).toLowerCase()));
+  if (overdue === 'true') cards = cards.filter(c => c.dueDate && new Date(c.dueDate+'T00:00') < new Date(new Date().toDateString()) && !isCardDone(c));
+  res.json({ ok:true, count: cards.length, cards: cards.map(cardPublic) });
+});
+
+// Detalhe de um card (com comentários e histórico completos)
+app.get('/api/agent/cards/:id', requireAgent, (req, res) => {
+  const { state } = readState();
+  const c = (state.cards||[]).find(x => String(x.id) === String(req.params.id));
+  if (!c) return res.status(404).json({ ok:false, error:'Card não encontrado' });
+  res.json({ ok:true, card: { ...cardPublic(c), comments: c.comments||[], history: c.history||[] } });
+});
+
+// Criar card
+app.post('/api/agent/cards', requireAgent, (req, res) => {
+  const b = req.body || {};
+  if (!b.title) return res.status(400).json({ ok:false, error:'title é obrigatório' });
+  if (!b.dueDate) return res.status(400).json({ ok:false, error:'dueDate é obrigatório (YYYY-MM-DD)' });
+  const dept = b.dept || DEPARTMENTS_SRV[0];
+  const colId = colIdByLabel(b.column || b.status) || 'briefing';
+  const { state } = readState();
+  if (!state.cards) state.cards = [];
+  const nextId = Math.max(state.nextId || 1, state.cards.reduce((m,c)=>Math.max(m,c.id||0),0)+1);
+  const who = b.by || 'Agente (MCP)';
+  const card = {
+    id: nextId, dept, title: b.title, column: colId,
+    assignee: b.assignee || '', priority: b.priority || 'Média',
+    dueDate: b.dueDate, funnel: b.funnel || '', description: b.description || '',
+    comments: [], history: [{ type:'create', to: colLabelById(colId), by: who, ts: new Date().toISOString() }],
+    createdAt: new Date().toISOString(),
+  };
+  state.cards.push(card);
+  state.nextId = nextId + 1;
+  state.activity = state.activity || [];
+  state.activity.unshift({ id: Date.now()+Math.random(), ts:new Date().toISOString(), user: who, text:`criou <b>${String(card.title).replace(/</g,'&lt;')}</b> em ${dept}${card.assignee?' · resp. '+card.assignee:''}` });
+  writeState(state);
+  if (card.assignee) notifyCreatedTasks([card]);
+  console.log(`[${timestamp()}] 🤖 agente criou card "${card.title}"`);
+  res.json({ ok:true, card: cardPublic(card) });
+});
+
+// Atualizar card (campos parciais) — grava histórico de status/prazo
+app.patch('/api/agent/cards/:id', requireAgent, (req, res) => {
+  const b = req.body || {};
+  const { state } = readState();
+  const c = (state.cards||[]).find(x => String(x.id) === String(req.params.id));
+  if (!c) return res.status(404).json({ ok:false, error:'Card não encontrado' });
+  const who = b.by || 'Agente (MCP)';
+  if (!c.history) c.history = [];
+  // status/coluna
+  if (b.column !== undefined || b.status !== undefined) {
+    const colId = colIdByLabel(b.column || b.status);
+    if (colId && colId !== c.column) {
+      c.history.push({ type:'move', from: colLabelById(c.column), to: colLabelById(colId), by: who, ts:new Date().toISOString() });
+      c.column = colId;
+    }
+  }
+  if (b.dueDate !== undefined && b.dueDate !== c.dueDate) {
+    c.history.push({ type:'due', from: c.dueDate||'(sem)', to: b.dueDate, by: who, ts:new Date().toISOString() });
+    c.dueDate = b.dueDate;
+  }
+  if (b.title !== undefined)       c.title = b.title;
+  if (b.assignee !== undefined)    c.assignee = b.assignee;
+  if (b.priority !== undefined)    c.priority = b.priority;
+  if (b.funnel !== undefined)      c.funnel = b.funnel;
+  if (b.description !== undefined) c.description = b.description;
+  if (b.dept !== undefined)        c.dept = b.dept;
+  writeState(state);
+  console.log(`[${timestamp()}] 🤖 agente editou card "${c.title}"`);
+  res.json({ ok:true, card: cardPublic(c) });
+});
+
+// Comentar num card
+app.post('/api/agent/cards/:id/comment', requireAgent, (req, res) => {
+  const { state } = readState();
+  const c = (state.cards||[]).find(x => String(x.id) === String(req.params.id));
+  if (!c) return res.status(404).json({ ok:false, error:'Card não encontrado' });
+  const text = (req.body.text||'').trim();
+  if (!text) return res.status(400).json({ ok:false, error:'text é obrigatório' });
+  if (!c.comments) c.comments = [];
+  c.comments.push({ author: req.body.by || 'Agente (MCP)', text, ts:new Date().toISOString() });
+  writeState(state);
+  res.json({ ok:true, comments: c.comments.length });
+});
+
+// Excluir card
+app.delete('/api/agent/cards/:id', requireAgent, (req, res) => {
+  const { state } = readState();
+  const before = (state.cards||[]).length;
+  const card = (state.cards||[]).find(x => String(x.id) === String(req.params.id));
+  if (!card) return res.status(404).json({ ok:false, error:'Card não encontrado' });
+  state.cards = state.cards.filter(x => String(x.id) !== String(req.params.id));
+  state.activity = state.activity || [];
+  state.activity.unshift({ id: Date.now()+Math.random(), ts:new Date().toISOString(), user: req.body.by || 'Agente (MCP)', text:`excluiu <b>${String(card.title).replace(/</g,'&lt;')}</b>` });
+  writeState(state);
+  res.json({ ok:true, removed: before - state.cards.length });
 });
 
 app.post('/api/state', (req, res) => {
