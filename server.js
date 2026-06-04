@@ -311,32 +311,54 @@ app.get('/api/me', (req, res) => {
 });
 
 // ── Nodemailer transporter ────────────────────────────────────────────────────
-// Transporte primário (465/SSL) e fallback (587/STARTTLS) com timeouts
-const mailOpts = {
-  auth: { user: gmailUser, pass: gmailPassword },
-  connectionTimeout: 15000,
-  greetingTimeout:   10000,
-  socketTimeout:     20000,
-  pool: true, maxConnections: 2,
-};
-const transporter   = nodemailer.createTransport({ host:'smtp.gmail.com', port:465, secure:true,  ...mailOpts });
-const transporter587 = nodemailer.createTransport({ host:'smtp.gmail.com', port:587, secure:false, requireTLS:true, ...mailOpts });
+// ── Envio de e-mail ─────────────────────────────────────────────────────────────
+// Railway BLOQUEIA SMTP (465/587). Usamos Resend via HTTPS (porta 443, não bloqueada).
+// SMTP fica como fallback (funciona em ambiente local).
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const RESEND_FROM    = process.env.RESEND_FROM || 'Kanban FM <kanban@financialmove.com.br>';
 
-// Envia com retry + fallback de porta (resolve timeout intermitente do host → Gmail)
+const transporter = nodemailer.createTransport({
+  host:'smtp.gmail.com', port:465, secure:true,
+  auth:{ user: gmailUser, pass: gmailPassword },
+  connectionTimeout: 12000, greetingTimeout: 8000, socketTimeout: 15000,
+});
+
+async function sendViaResend({ to, cc, subject, html }) {
+  const body = {
+    from: RESEND_FROM,
+    to: Array.isArray(to) ? to : [to].filter(Boolean),
+    subject, html,
+  };
+  if (cc && (Array.isArray(cc) ? cc.length : cc)) body.cc = Array.isArray(cc) ? cc : [cc];
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15000),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Resend HTTP ${res.status}`);
+  return { messageId: data.id, response: 'resend:' + data.id };
+}
+
+// Normaliza CC string "a, b" → array
+function ccToArray(cc) {
+  if (!cc) return [];
+  if (Array.isArray(cc)) return cc.filter(Boolean);
+  return cc.split(',').map(s => s.trim()).filter(Boolean);
+}
+
+// Envio robusto: Resend (HTTPS) primeiro; SMTP como fallback
 async function sendMailRobust(opts) {
-  const payload = { from: `"Financial Move Kanban" <${gmailUser}>`, ...opts };
-  // tenta 465 (2x) depois 587 (1x)
-  const attempts = [transporter, transporter, transporter587];
-  let lastErr;
-  for (let i = 0; i < attempts.length; i++) {
+  const to = opts.to, cc = ccToArray(opts.cc), subject = opts.subject, html = opts.html;
+  if (RESEND_API_KEY) {
     try {
-      return await attempts[i].sendMail(payload);
+      return await sendViaResend({ to, cc, subject, html });
     } catch (e) {
-      lastErr = e;
-      console.warn(`[${timestamp()}] ✉️  tentativa ${i+1} falhou (${attempts[i].options.port}): ${e.message}`);
+      console.warn(`[${timestamp()}] ✉️  Resend falhou: ${e.message} — tentando SMTP`);
     }
   }
-  throw lastErr;
+  return await transporter.sendMail({ from: `"Financial Move Kanban" <${gmailUser}>`, to, cc: cc.join(', '), subject, html });
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
